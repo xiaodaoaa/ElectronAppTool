@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startServer: (data) => ipcRenderer.invoke('start-server', data),
   stopServer: () => ipcRenderer.invoke('stop-server'),
   sendServerMessage: (data) => ipcRenderer.invoke('send-server-message', data),
+  broadcastServerMessage: (data) => ipcRenderer.invoke('broadcast-server-message', data),
+  updateServerOptions: (data) => ipcRenderer.invoke('update-server-options', data),
 
   connectClient: (data) => ipcRenderer.invoke('connect-client', data),
   disconnectClient: () => ipcRenderer.invoke('disconnect-client'),

@@ -197,6 +197,41 @@ ipcMain.handle('send-server-message', async (event, { clientAddr, message, isHex
   }
 })
 
+ipcMain.handle('broadcast-server-message', async (event, { message, isHex }) => {
+  try {
+    let data = message
+    if (isHex) {
+      const hexStr = message.replace(/\s/g, '')
+      data = Buffer.from(hexStr, 'hex')
+    }
+    let sentCount = 0
+    connectedClients.forEach((client, addr) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(data)
+        sendToRenderer('server-message-sent', {
+          clientAddr: addr,
+          message,
+          isBinary: isHex,
+          timestamp: new Date().toISOString()
+        })
+        sentCount++
+      }
+    })
+    return { success: true, sentCount }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('update-server-options', async (event, options) => {
+  serverOptions = {
+    echo: options?.echo ?? serverOptions.echo,
+    sendall: options?.sendall ?? serverOptions.sendall,
+    tls13: options?.tls13 ?? serverOptions.tls13
+  }
+  return { success: true }
+})
+
 // ==================== WebSocket Client IPC ====================
 
 ipcMain.handle('connect-client', async (event, { url, headers }) => {

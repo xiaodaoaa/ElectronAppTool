@@ -169,16 +169,26 @@ export default {
 
     function sendToClient() {
       if (!selectedClient.value) return
+      const sendTextContent = sendText.value
+      const isHex = sendIsHex.value
+
       if (sendFileMode.value && sendFilePath.value) {
         // Send file as binary
         window.electronAPI.readFileBinary({ filePath: sendFilePath.value })
           .then(result => {
             if (result?.success) {
-              window.electronAPI.sendServerMessage({
-                clientAddr: selectedClient.value,
-                message: result.hex,
-                isHex: true
-              })
+              if (optSendall.value) {
+                window.electronAPI.broadcastServerMessage({
+                  message: result.hex,
+                  isHex: true
+                })
+              } else {
+                window.electronAPI.sendServerMessage({
+                  clientAddr: selectedClient.value,
+                  message: result.hex,
+                  isHex: true
+                })
+              }
               // Don't push locally - the onServerMessageSent event will handle display
             } else {
               displayMessages.value.push({
@@ -197,11 +207,19 @@ export default {
           })
         return
       }
-      window.electronAPI.sendServerMessage({
-        clientAddr: selectedClient.value,
-        message: sendText.value,
-        isHex: sendIsHex.value
-      })
+
+      if (optSendall.value) {
+        window.electronAPI.broadcastServerMessage({
+          message: sendTextContent,
+          isHex
+        })
+      } else {
+        window.electronAPI.sendServerMessage({
+          clientAddr: selectedClient.value,
+          message: sendTextContent,
+          isHex
+        })
+      }
     }
 
     function clearUp() {
@@ -296,6 +314,17 @@ export default {
     }
 
     watch([serverUrl, sslPassword, optTls13, optSendall, optEcho, sendText, sendIsHex, sendFileMode, sendFilePath, saveToFile, saveFilePath, autoScroll], persistConfig)
+
+    // ─ Runtime option sync: push sendall/echo/tls13 changes to main process ──
+    watch([optSendall, optEcho, optTls13], () => {
+      if (isRunning.value) {
+        window.electronAPI.updateServerOptions({
+          sendall: optSendall.value,
+          echo: optEcho.value,
+          tls13: optTls13.value
+        })
+      }
+    })
 
     onMounted(() => {
       // Load saved config
