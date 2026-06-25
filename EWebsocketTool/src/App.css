@@ -1,0 +1,124 @@
+/* src/App.css */
+.app-container {
+  box-sizing: border-box;
+}
+
+.app-container *,
+.app-container *::before,
+.app-container *::after {
+  box-sizing: border-box;
+}
+
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-tabs {
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.app-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.tab-content {
+  flex: 1;
+  overflow: hidden;
+  padding: 16px;
+}
+
+/* 左右分栏布局 */
+.tab-layout {
+  display: flex;
+  height: 100%;
+  gap: 16px;
+}
+
+.tab-left {
+  width: 360px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tab-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* 日志面板 */
+.log-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.log-panel-header {
+  padding: 8px 12px;
+  font-weight: 500;
+  border-bottom: 1px solid #d9d9d9;
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.log-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  background: #fff;
+}
+
+.log-entry {
+  word-break: break-all;
+}
+
+.log-time {
+  color: #999;
+  margin-right: 6px;
+}
+
+.log-direction {
+  margin-right: 6px;
+  font-weight: 500;
+}
+
+.log-send .log-direction {
+  color: #1677ff;
+}
+
+.log-receive .log-direction {
+  color: #52c41a;
+}
+
+.log-info .log-direction {
+  color: #999;
+}
+
+.log-error .log-direction {
+  color: #ff4d4f;
+}
+
+.log-message {
+  color: #333;
+}
+
+.log-empty {
+  color: #999;
+  text-align: center;
+  padding: 40px 0;
+}

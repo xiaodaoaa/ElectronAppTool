@@ -1,0 +1,13 @@
+appId: com.ewebsocketman.app
+productName: EWebsocketMan
+directories:
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+win:
+  target: nsis
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
