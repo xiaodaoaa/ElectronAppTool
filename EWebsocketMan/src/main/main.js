@@ -86,21 +86,23 @@ ipcMain.handle('start-server', async (event, { url, options }) => {
         .join('\n')
       sendToRenderer('server-handshake', { clientAddr, handshakeInfo })
 
-      ws.on('message', (data) => {
-        const message = data.toString()
+      ws.on('message', (data, isBinary) => {
+        const message = isBinary ? data.toString('hex') : data.toString()
         sendToRenderer('server-message-received', {
           clientAddr,
           message,
+          isBinary,
           timestamp: new Date().toISOString()
         })
 
         // Read options from module-level variable (not closure)
         if (serverOptions.echo) {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(message)
+            ws.send(data)
             sendToRenderer('server-message-sent', {
               clientAddr,
               message,
+              isBinary,
               timestamp: new Date().toISOString()
             })
           }
@@ -186,6 +188,7 @@ ipcMain.handle('send-server-message', async (event, { clientAddr, message, isHex
     sendToRenderer('server-message-sent', {
       clientAddr,
       message,
+      isBinary: isHex,
       timestamp: new Date().toISOString()
     })
     return { success: true }
@@ -222,9 +225,11 @@ ipcMain.handle('connect-client', async (event, { url, headers }) => {
       })
     })
 
-    wsc.on('message', (data) => {
+    wsc.on('message', (data, isBinary) => {
+      const message = isBinary ? data.toString('hex') : data.toString()
       sendToRenderer('client-message-received', {
-        message: data.toString(),
+        message,
+        isBinary,
         timestamp: new Date().toISOString()
       })
     })
@@ -290,6 +295,7 @@ ipcMain.handle('send-client-message', async (event, { message, isHex }) => {
     wsc.send(data)
     sendToRenderer('client-message-sent', {
       message,
+      isBinary: isHex,
       timestamp: new Date().toISOString()
     })
     return { success: true }
@@ -354,6 +360,35 @@ ipcMain.handle('append-to-file', async (event, { filePath, content }) => {
   }
 })
 
+ipcMain.handle('append-binary-to-file', async (event, { filePath, hex }) => {
+  try {
+    const buffer = Buffer.from(hex, 'hex')
+    fs.appendFileSync(filePath, buffer)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('write-binary-file', async (event, { filePath, hex }) => {
+  try {
+    const buffer = Buffer.from(hex, 'hex')
+    fs.writeFileSync(filePath, buffer)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('write-file', async (event, { filePath, content }) => {
+  try {
+    fs.writeFileSync(filePath, content, 'utf-8')
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
 // ==================== File Dialog ====================
 
 ipcMain.handle('select-save-file', async () => {
@@ -370,6 +405,21 @@ ipcMain.handle('select-save-file', async () => {
     return { success: false, filePath: null }
   }
   return { success: true, filePath: result.filePath }
+})
+
+ipcMain.handle('select-open-file', async () => {
+  const { dialog } = require('electron')
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择要发送的文件',
+    properties: ['openFile'],
+    filters: [
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  })
+  if (result.canceled) {
+    return { success: false, filePath: null }
+  }
+  return { success: true, filePath: result.filePaths[0] }
 })
 
 // ==================== App Lifecycle ====================

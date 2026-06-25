@@ -314,6 +314,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.save-to-file-row {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 4px;
 }
 
 .display-area .area-label .label-left {
@@ -325,6 +335,8 @@ body {
 .clear-btns {
   display: flex;
   gap: 4px;
+  position: relative;
+  z-index: 100;
 }
 
 .clear-btns button {
@@ -334,6 +346,10 @@ body {
   cursor: pointer;
   border-radius: 2px;
   font-size: 12px;
+  position: relative;
+  z-index: 100;
+  pointer-events: auto;
+  user-select: none;
 }
 
 .clear-btns button:hover {
@@ -351,6 +367,7 @@ body {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
+  min-height: 0;
 }
 
 .display-box .msg-received {

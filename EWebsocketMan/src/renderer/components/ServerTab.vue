@@ -59,6 +59,7 @@
               placeholder="输入文件路径"
               style="flex:1;"
             />
+            <button v-if="sendFileMode" @click="selectSendFile" style="font-size:12px;">选择文件</button>
             <span style="font-size:11px;color:#888;">优先级高，文件是按16进制发送</span>
           </div>
           <textarea
@@ -73,17 +74,21 @@
           <div class="area-label">
             <span class="label-left">
               显示区：
-              <label><input type="checkbox" v-model="saveToFile" /> 保存到文件...</label>
-              <input v-if="saveToFile" type="text" v-model="saveFilePath" placeholder="输入保存路径" style="width:160px;" />
-              <button v-if="saveToFile" @click="selectSaveFile" style="font-size:12px;">选择文件</button>
-              <label><input type="checkbox" v-model="autoScroll" /> 自动滚动到底部</label>
             </span>
             <div class="clear-btns">
               <button @click="clearUp">↑ 清空</button>
               <button @click="clearDown">↓ 清空</button>
             </div>
           </div>
-          <div class="display-box" ref="displayBox">
+          <div class="save-to-file-row">
+            <label><input type="checkbox" v-model="saveToFile" /> 保存到文件...</label>
+            <input v-if="saveToFile" type="text" v-model="saveFilePath" placeholder="输入保存路径" style="width:160px;" />
+            <button v-if="saveToFile" @click="selectSaveFile" style="font-size:12px;">选择文件</button>
+            <label style="font-size:12px;display:flex;align-items:center;gap:3px;margin-left:auto;">
+              <input type="checkbox" v-model="autoScroll" /> 自动滚动到底部
+            </label>
+          </div>
+          <div class="display-box" ref="displayBox" :key="displayKey">
             <div v-for="(msg, idx) in displayMessages" :key="idx">
               <template v-if="msg.type === 'handshake'">
                 <span class="msg-handshake">{{ msg.content }}</span>
@@ -133,6 +138,7 @@ export default {
     const sendFileMode = ref(false)
     const sendFilePath = ref('')
     const displayMessages = ref([])
+    const displayKey = ref(0)  // 用于强制重新渲染 display-box
     const saveToFile = ref(false)
     const saveFilePath = ref('')
     const displayBox = ref(null)
@@ -163,19 +169,51 @@ export default {
 
     function sendToClient() {
       if (!selectedClient.value) return
-      let message = sendText.value
       if (sendFileMode.value && sendFilePath.value) {
-        message = `[文件: ${sendFilePath.value}]`
+        // Send file as binary
+        window.electronAPI.readFileBinary({ filePath: sendFilePath.value })
+          .then(result => {
+            if (result?.success) {
+              window.electronAPI.sendServerMessage({
+                clientAddr: selectedClient.value,
+                message: result.hex,
+                isHex: true
+              })
+              // Don't push locally - the onServerMessageSent event will handle display
+            } else {
+              displayMessages.value.push({
+                type: 'system',
+                content: '读取文件失败: ' + (result?.error || '未知错误')
+              })
+              scrollToBottom()
+            }
+          })
+          .catch(err => {
+            displayMessages.value.push({
+              type: 'system',
+              content: '读取文件失败: ' + (err.message || '未知错误')
+            })
+            scrollToBottom()
+          })
+        return
       }
       window.electronAPI.sendServerMessage({
         clientAddr: selectedClient.value,
-        message,
+        message: sendText.value,
         isHex: sendIsHex.value
       })
     }
 
-    function clearUp() { displayMessages.value = [] }
-    function clearDown() { displayMessages.value = [] }
+    function clearUp() {
+      displayMessages.value.splice(0, displayMessages.value.length)
+      sendText.value = ''
+      displayKey.value++
+    }
+    function clearDown() {
+      displayMessages.value.splice(0, displayMessages.value.length)
+      sendText.value = ''
+      displayKey.value++
+    }
 
     function scrollToBottom() {
       if (!autoScroll.value) return
@@ -192,9 +230,13 @@ export default {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
     }
 
-    function logToFile(line) {
+    function saveReceivedMessage(message, isBinary) {
       if (saveToFile.value && saveFilePath.value) {
-        window.electronAPI.appendToFile({ filePath: saveFilePath.value, content: line })
+        if (isBinary) {
+          window.electronAPI.appendBinaryToFile({ filePath: saveFilePath.value, hex: message })
+        } else {
+          window.electronAPI.appendToFile({ filePath: saveFilePath.value, content: message })
+        }
       }
     }
 
@@ -202,6 +244,27 @@ export default {
       window.electronAPI.selectSaveFile().then(result => {
         if (result?.success && result?.filePath) {
           saveFilePath.value = result.filePath
+        }
+      })
+    }
+
+    function selectSendFile() {
+      window.electronAPI.selectOpenFile().then(result => {
+        if (result?.success && result?.filePath) {
+          sendFilePath.value = result.filePath
+          // Read file content and display in textarea
+          window.electronAPI.readFileBinary({ filePath: result.filePath }).then(fileResult => {
+            if (fileResult?.success) {
+              sendText.value = fileResult.hex
+              sendIsHex.value = true
+            } else {
+              displayMessages.value.push({
+                type: 'system',
+                content: `读取文件失败: ${fileResult?.error || '未知错误'}`
+              })
+              scrollToBottom()
+            }
+          })
         }
       })
     }
@@ -302,24 +365,25 @@ export default {
       })
 
       subscribe('onServerMessageReceived', (data) => {
+        const content = data.isBinary ? '[文件]' : data.message
         displayMessages.value.push({
           type: 'received',
           clientAddr: data.clientAddr,
-          content: data.message,
+          content,
           time: formatTime(data.timestamp)
         })
-        logToFile(`[${formatTime(data.timestamp)}] 接收 [${data.clientAddr}]: ${data.message}`)
+        saveReceivedMessage(data.message, data.isBinary)
         scrollToBottom()
       })
 
       subscribe('onServerMessageSent', (data) => {
+        const content = data.isBinary ? '[文件]' : data.message
         displayMessages.value.push({
           type: 'sent',
           clientAddr: data.clientAddr,
-          content: data.message,
+          content,
           time: formatTime(data.timestamp)
         })
-        logToFile(`[${formatTime(data.timestamp)}] 发送 [${data.clientAddr}]: ${data.message}`)
         scrollToBottom()
       })
 
@@ -341,8 +405,8 @@ export default {
       serverUrl, sslPassword, optTls13, optSendall, optEcho,
       isRunning, connectedClients, selectedClient,
       sendText, sendIsHex, sendFileMode, sendFilePath,
-      displayMessages, saveToFile, saveFilePath, displayBox, autoScroll,
-      toggleServer, sendToClient, clearUp, clearDown, selectSaveFile
+      displayMessages, displayKey, saveToFile, saveFilePath, displayBox, autoScroll,
+      toggleServer, sendToClient, clearUp, clearDown, selectSaveFile, selectSendFile
     }
   }
 }
