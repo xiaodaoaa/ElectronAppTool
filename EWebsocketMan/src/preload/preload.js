@@ -28,7 +28,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveConfig: (data) => ipcRenderer.invoke('save-config', data),
   loadConfig: () => ipcRenderer.invoke('load-config'),
   appendToFile: (data) => ipcRenderer.invoke('append-to-file', data),
+  appendBinaryToFile: (data) => ipcRenderer.invoke('append-binary-to-file', data),
+  writeFile: (data) => ipcRenderer.invoke('write-file', data),
+  writeBinaryFile: (data) => ipcRenderer.invoke('write-binary-file', data),
   selectSaveFile: () => ipcRenderer.invoke('select-save-file'),
+  selectOpenFile: () => ipcRenderer.invoke('select-open-file'),
 
   // ── Event listeners (each returns an unsubscribe function) ──
 

@@ -63,6 +63,14 @@
             <label style="font-size:12px;display:flex;align-items:center;gap:3px;">
               <input type="checkbox" v-model="sendFileMode" /> 发送文件...
             </label>
+            <input
+              v-if="sendFileMode"
+              type="text"
+              v-model="sendFilePath"
+              placeholder="输入文件路径"
+              style="flex:1;"
+            />
+            <button v-if="sendFileMode" @click="selectSendFile" style="font-size:12px;">选择文件</button>
             <span style="font-size:11px;color:#888;">优先级高，文件是按16进制发送</span>
           </div>
           <textarea
@@ -77,17 +85,21 @@
           <div class="area-label">
             <span class="label-left">
               显示区：
-              <label><input type="checkbox" v-model="saveToFile" /> 保存到文件...</label>
-              <input v-if="saveToFile" type="text" v-model="saveFilePath" placeholder="输入保存路径" style="width:160px;" />
-              <button v-if="saveToFile" @click="selectSaveFile" style="font-size:12px;">选择文件</button>
-              <label><input type="checkbox" v-model="autoScroll" /> 自动滚动到底部</label>
             </span>
             <div class="clear-btns">
               <button @click="clearUp">↑ 清空</button>
               <button @click="clearDown">↓ 清空</button>
             </div>
           </div>
-          <div class="display-box" ref="displayBox">
+          <div class="save-to-file-row">
+            <label><input type="checkbox" v-model="saveToFile" /> 保存到文件...</label>
+            <input v-if="saveToFile" type="text" v-model="saveFilePath" placeholder="输入保存路径" style="width:160px;" />
+            <button v-if="saveToFile" @click="selectSaveFile" style="font-size:12px;">选择文件</button>
+            <label style="font-size:12px;display:flex;align-items:center;gap:3px;margin-left:auto;">
+              <input type="checkbox" v-model="autoScroll" /> 自动滚动到底部
+            </label>
+          </div>
+          <div class="display-box" ref="displayBox" :key="displayKey">
             <div v-for="(msg, idx) in displayMessages" :key="idx">
               <template v-if="msg.type === 'connected'">
                 <span class="msg-arrow-in">&lt;——</span>
@@ -146,8 +158,10 @@ export default {
     const sendText = ref('测试消息001')
     const sendIsHex = ref(false)
     const sendFileMode = ref(false)
+    const sendFilePath = ref('')
     const saveRequestName = ref('')
     const displayMessages = ref([])
+    const displayKey = ref(0)  // 用于强制重新渲染 display-box
     const saveToFile = ref(false)
     const saveFilePath = ref('')
     const displayBox = ref(null)
@@ -189,23 +203,88 @@ export default {
 
     function sendMessage() {
       if (!isConnected.value) return
+      let message = sendText.value
+      if (sendFileMode.value && sendFilePath.value) {
+        // Read file as hex and send
+        window.electronAPI.readFileBinary({ filePath: sendFilePath.value })
+          .then(result => {
+            if (result?.success) {
+              window.electronAPI.sendClientMessage({
+                message: result.hex,
+                isHex: true
+              })
+              // Don't push locally - the onClientMessageSent event will handle display
+            } else {
+              displayMessages.value.push({
+                type: 'error',
+                content: `读取文件失败: ${result?.error || '未知错误'}`
+              })
+              scrollToBottom()
+            }
+          })
+          .catch(err => {
+            displayMessages.value.push({
+              type: 'error',
+              content: `读取文件失败: ${err.message || '未知错误'}`
+            })
+            scrollToBottom()
+          })
+        return
+      }
       window.electronAPI.sendClientMessage({
-        message: sendText.value,
+        message,
         isHex: sendIsHex.value
       })
     }
 
     function saveRequest() {
-      if (!saveRequestName.value) return
-      displayMessages.value.push({
-        type: 'system',
-        content: `请求已保存: ${saveRequestName.value}`
+      // Pick save location, then write current request (URL + headers + body) to file
+      window.electronAPI.selectSaveFile().then(result => {
+        if (!result?.success || !result?.filePath) return
+        // Update the input field to show selected file path
+        saveRequestName.value = result.filePath
+        const lines = []
+        lines.push(`URL: ${clientUrl.value}`)
+        const activeHeaders = headers.value.filter(h => h.key && h.value)
+        if (activeHeaders.length > 0) {
+          lines.push('')
+          lines.push('Headers:')
+          activeHeaders.forEach(h => lines.push(`${h.key}: ${h.value}`))
+        }
+        lines.push('')
+        lines.push('Body:')
+        lines.push(sendText.value)
+        return window.electronAPI.writeFile({
+          filePath: result.filePath,
+          content: lines.join('\n')
+        })
+      }).then(writeResult => {
+        if (!writeResult) return  // dialog cancelled
+        if (writeResult.success) {
+          displayMessages.value.push({
+            type: 'system',
+            content: `请求已保存`
+          })
+        } else {
+          displayMessages.value.push({
+            type: 'error',
+            content: `保存失败: ${writeResult.error || '未知错误'}`
+          })
+        }
+        scrollToBottom()
       })
-      scrollToBottom()
     }
 
-    function clearUp() { displayMessages.value = [] }
-    function clearDown() { displayMessages.value = [] }
+    function clearUp() {
+      displayMessages.value.splice(0, displayMessages.value.length)
+      sendText.value = ''
+      displayKey.value++
+    }
+    function clearDown() {
+      displayMessages.value.splice(0, displayMessages.value.length)
+      sendText.value = ''
+      displayKey.value++
+    }
 
     function scrollToBottom() {
       if (!autoScroll.value) return
@@ -222,9 +301,13 @@ export default {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
     }
 
-    function logToFile(line) {
+    function saveReceivedMessage(message, isBinary) {
       if (saveToFile.value && saveFilePath.value) {
-        window.electronAPI.appendToFile({ filePath: saveFilePath.value, content: line })
+        if (isBinary) {
+          window.electronAPI.appendBinaryToFile({ filePath: saveFilePath.value, hex: message })
+        } else {
+          window.electronAPI.appendToFile({ filePath: saveFilePath.value, content: message })
+        }
       }
     }
 
@@ -232,6 +315,14 @@ export default {
       window.electronAPI.selectSaveFile().then(result => {
         if (result?.success && result?.filePath) {
           saveFilePath.value = result.filePath
+        }
+      })
+    }
+
+    function selectSendFile() {
+      window.electronAPI.selectOpenFile().then(result => {
+        if (result?.success && result?.filePath) {
+          sendFilePath.value = result.filePath
         }
       })
     }
@@ -294,7 +385,6 @@ export default {
           content: 'connected',
           time: formatTime(data.timestamp)
         })
-        logToFile(`[${formatTime(data.timestamp)}] 连接成功`)
         scrollToBottom()
       })
 
@@ -305,27 +395,27 @@ export default {
           content: 'disconnected',
           time: formatTime(data.timestamp)
         })
-        logToFile(`[${formatTime(data.timestamp)}] 连接断开`)
         scrollToBottom()
       })
 
       subscribe('onClientMessageReceived', (data) => {
+        const content = data.isBinary ? '[文件]' : data.message
         displayMessages.value.push({
           type: 'received',
-          content: data.message,
+          content,
           time: formatTime(data.timestamp)
         })
-        logToFile(`[${formatTime(data.timestamp)}] 接收: ${data.message}`)
+        saveReceivedMessage(data.message, data.isBinary)
         scrollToBottom()
       })
 
       subscribe('onClientMessageSent', (data) => {
+        const content = data.isBinary ? '[文件]' : data.message
         displayMessages.value.push({
           type: 'sent',
-          content: data.message,
+          content,
           time: formatTime(data.timestamp)
         })
-        logToFile(`[${formatTime(data.timestamp)}] 发送: ${data.message}`)
         scrollToBottom()
       })
 
@@ -335,7 +425,6 @@ export default {
           content: data.error,
           time: data.timestamp ? formatTime(data.timestamp) : ''
         })
-        logToFile(`[${data.timestamp ? formatTime(data.timestamp) : ''}] 错误: ${data.error}`)
         scrollToBottom()
       })
     })
@@ -348,10 +437,10 @@ export default {
     return {
       clientUrl, shareUrl, shareHead, isConnected,
       requestList, selectedRequest, headers,
-      sendText, sendIsHex, sendFileMode, saveRequestName,
-      displayMessages, saveToFile, saveFilePath, displayBox, autoScroll,
+      sendText, sendIsHex, sendFileMode, sendFilePath, saveRequestName,
+      displayMessages, displayKey, saveToFile, saveFilePath, displayBox, autoScroll,
       toggleConnection, selectRequest, sendMessage, saveRequest,
-      clearUp, clearDown, selectSaveFile
+      clearUp, clearDown, selectSaveFile, selectSendFile
     }
   }
 }
