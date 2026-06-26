@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendToClients: (clientIds, message) =>
     ipcRenderer.invoke('send-to-clients', { clientIds, message }),
   broadcast: (message) => ipcRenderer.invoke('broadcast', message),
+  showContextMenu: () => ipcRenderer.invoke('show-context-menu'),
 
   onServerStarted: (callback) => {
     const handler = (_event, data) => callback(data)
