@@ -80,7 +80,7 @@ const ClientTab = () => {
       </div>
 
       <div className="tab-right">
-        <LogPanel logs={logs} />
+        <LogPanel logs={logs} onClear={() => setLogs([])} />
       </div>
     </div>
   )
