@@ -34,7 +34,8 @@ const PathDetail: React.FC<PathDetailProps> = ({ config, onSave, onDelete }) => 
         responseType: config.responseType,
         responseContent: config.responseContent,
       })
-      setIsEditing(false)
+      // For new items, enable editing immediately
+      setIsEditing(config.id === '__new__')
     }
   }, [config, form])
 

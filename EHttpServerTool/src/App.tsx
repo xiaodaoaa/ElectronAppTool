@@ -75,24 +75,37 @@ const App: React.FC = () => {
     await window.electronAPI.stopServer()
   }, [])
 
-  const handleAddPath = useCallback(async () => {
-    if (!window.electronAPI) return
-    const result = await window.electronAPI.addPath(EMPTY_CONFIG)
-    if (result.success && result.id) {
-      const list = await window.electronAPI.listPaths()
-      setPaths(list)
-      setSelectedId(result.id)
-    } else if (result.error) {
-      message.error(result.error)
+  const handleAddPath = useCallback(() => {
+    // Create a temporary unsaved config for the user to edit
+    const tempConfig: PathConfig = {
+      id: '__new__',
+      path: '',
+      methods: ['GET'],
+      echoEnabled: false,
+      responseType: 'json',
+      responseContent: '',
     }
+    setPaths((prev) => [...prev, tempConfig])
+    setSelectedId('__new__')
   }, [])
 
   const handleSavePath = useCallback(async (config: PathConfig) => {
     if (!window.electronAPI) return
-    const result = await window.electronAPI.updatePath(config)
+    let result
+    if (config.id === '__new__') {
+      // New path - call addPath
+      const { id, ...configWithoutId } = config
+      result = await window.electronAPI.addPath(configWithoutId)
+    } else {
+      // Existing path - call updatePath
+      result = await window.electronAPI.updatePath(config)
+    }
     if (result.success) {
       const list = await window.electronAPI.listPaths()
       setPaths(list)
+      if (config.id === '__new__' && result.id) {
+        setSelectedId(result.id)
+      }
       message.success('保存成功')
     } else if (result.error) {
       message.error(result.error)
