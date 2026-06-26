@@ -3,6 +3,7 @@ import { LogEntry } from '../types'
 
 interface LogPanelProps {
   logs: LogEntry[]
+  onClear?: () => void
 }
 
 const DIRECTION_LABELS: Record<string, string> = {
@@ -12,7 +13,7 @@ const DIRECTION_LABELS: Record<string, string> = {
   error: '错误',
 }
 
-const LogPanel = ({ logs }: LogPanelProps) => {
+const LogPanel = ({ logs, onClear }: LogPanelProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
 
@@ -29,10 +30,24 @@ const LogPanel = ({ logs }: LogPanelProps) => {
     }
   }, [logs])
 
+  const handleContextMenu = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (!window.electronAPI?.showContextMenu) return
+    const action = await window.electronAPI.showContextMenu()
+    if (action === 'clear' && onClear) {
+      onClear()
+    }
+  }
+
   return (
     <div className="log-panel">
       <div className="log-panel-header">消息日志</div>
-      <div className="log-panel-content" ref={containerRef} onScroll={handleScroll}>
+      <div
+        className="log-panel-content"
+        ref={containerRef}
+        onScroll={handleScroll}
+        onContextMenu={handleContextMenu}
+      >
         {logs.map((log) => (
           <div key={log.id} className={`log-entry log-${log.type}`}>
             <span className="log-time">[{log.timestamp}]</span>
