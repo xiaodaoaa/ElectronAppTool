@@ -19,6 +19,7 @@ export interface ElectronAPI {
   stopServer: () => Promise<{ success: boolean }>
   sendToClients: (clientIds: string[], message: string) => Promise<{ sent: number; total: number }>
   broadcast: (message: string) => Promise<{ sent: number; total: number }>
+  showContextMenu: () => Promise<string | null>
   onServerStarted: (callback: (data: { port: number }) => void) => () => void
   onServerStopped: (callback: () => void) => () => void
   onServerError: (callback: (data: { message: string }) => void) => () => void
