@@ -1,5 +1,5 @@
 // electron/main.js
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu } = require('electron')
 const path = require('path')
 const { WebSocketServer } = require('ws')
 
@@ -153,6 +153,20 @@ function setupIPC() {
       }
     }
     return { sent, total }
+  })
+
+  ipcMain.handle('show-context-menu', async () => {
+    return new Promise((resolve) => {
+      const menu = Menu.buildFromTemplate([
+        {
+          label: '清空',
+          click: () => resolve('clear'),
+        },
+      ])
+      menu.popup({
+        callback: () => resolve(null),
+      })
+    })
   })
 }
 
