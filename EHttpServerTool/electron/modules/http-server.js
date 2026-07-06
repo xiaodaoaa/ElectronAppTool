@@ -58,9 +58,10 @@ function buildEchoResponse(method, urlPath, headers, query, body) {
 }
 
 class HttpServerManager {
-  constructor(pathConfigManager, requestLogger) {
+  constructor(pathConfigManager, requestLogger, logger) {
     this.pathConfig = pathConfigManager
     this.logger = requestLogger
+    this.log = logger || console
     this.server = null
     this.sendToRenderer = null
   }
@@ -77,11 +78,13 @@ class HttpServerManager {
       })
 
       this.server.on('listening', () => {
+        this.log.info(`HTTP 服务器启动在端口 {0}`, port)
         this.sendToRenderer('server-started', { port })
         resolve({ success: true })
       })
 
       this.server.on('error', (err) => {
+        this.log.error('服务器错误: {0}', err.message)
         this.server = null
         this.sendToRenderer('server-error', { message: err.message })
         reject(err)
@@ -100,6 +103,7 @@ class HttpServerManager {
     if (this.server) {
       return new Promise((resolve) => {
         this.server.close(() => {
+          this.log.info('HTTP 服务器已停止')
           this.server = null
           if (this.sendToRenderer) {
             this.sendToRenderer('server-stopped')
@@ -121,6 +125,8 @@ class HttpServerManager {
     const body = await parseBody(req)
     const headers = { ...req.headers }
 
+    this.log.trace('收到请求: {0} {1} 来自 {2}', method, reqPath, clientIp)
+
     // Log the request
     this.logger.log({ clientIp, method, path: reqPath, headers, query, body })
 
@@ -133,6 +139,7 @@ class HttpServerManager {
     // Find matching path config
     const config = this.pathConfig.getByPath(reqPath)
     if (!config) {
+      this.log.warn('路径未找到: {0}', reqPath)
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
       res.end('404 Not Found')
       return
@@ -140,6 +147,7 @@ class HttpServerManager {
 
     // Check method
     if (!config.methods.includes(method)) {
+      this.log.warn('方法不允许: {0} {1}', method, reqPath)
       res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' })
       res.end('405 Method Not Allowed')
       return
@@ -147,6 +155,7 @@ class HttpServerManager {
 
     // Echo mode
     if (config.echoEnabled) {
+      this.log.debug('回显模式: {0} {1}', method, reqPath)
       const echoBody = buildEchoResponse(method, reqPath, headers, query, body)
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(echoBody)
@@ -154,6 +163,7 @@ class HttpServerManager {
     }
 
     // Custom response
+    this.log.debug('自定义响应: {0} {1}', method, reqPath)
     const contentType = RESPONSE_CONTENT_TYPES[config.responseType] || 'text/plain; charset=utf-8'
     res.writeHead(200, { 'Content-Type': contentType })
     res.end(config.responseContent || '')

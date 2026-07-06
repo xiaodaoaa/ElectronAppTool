@@ -3,11 +3,13 @@ const path = require('path')
 const { PathConfigManager } = require('./modules/path-config')
 const { RequestLogger } = require('./modules/request-logger')
 const { HttpServerManager } = require('./modules/http-server')
+const { createLogger } = require('./modules/logger')
 
 let mainWindow = null
 let pathConfigManager = null
 let requestLogger = null
 let httpServerManager = null
+let rootLogger = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -36,9 +38,25 @@ function sendToRenderer(channel, data) {
 
 function setupModules() {
   const userDataPath = app.getPath('userData')
+  // 日志文件位置：程序所在目录下的 logs/
+  // 开发模式：项目根目录；打包后：exe 所在目录
+  const appDir = app.isPackaged
+    ? path.dirname(app.getPath('exe'))
+    : path.resolve(__dirname, '..')
+
+  // 创建根日志记录器
+  rootLogger = createLogger({ name: 'main', appDir })
+
+  // 转发日志事件到渲染进程（DevTools）
+  rootLogger.on('log', (logData) => {
+    sendToRenderer('dev-log', logData)
+  })
+
   pathConfigManager = new PathConfigManager(userDataPath)
   requestLogger = new RequestLogger()
-  httpServerManager = new HttpServerManager(pathConfigManager, requestLogger)
+  httpServerManager = new HttpServerManager(pathConfigManager, requestLogger, rootLogger)
+
+  rootLogger.info('模块初始化完成')
 }
 
 function setupIPC() {

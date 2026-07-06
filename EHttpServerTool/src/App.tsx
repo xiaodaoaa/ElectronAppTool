@@ -55,6 +55,29 @@ const App: React.FC = () => {
       setLogs((prev) => [...prev, log])
     }))
 
+    // DevTools 日志转发
+    cleanups.push(window.electronAPI.onDevLog((data) => {
+      const formatted = `[${data.level}] [${data.module}] ${data.message}`
+      switch (data.level) {
+        case 'TRACE':
+        case 'DEBUG':
+          console.debug(formatted)
+          break
+        case 'INFO':
+          console.info(formatted)
+          break
+        case 'WARN':
+          console.warn(formatted)
+          break
+        case 'ERROR':
+        case 'FATAL':
+          console.error(formatted)
+          break
+        default:
+          console.log(formatted)
+      }
+    }))
+
     return () => {
       for (const cleanup of cleanups) cleanup()
     }

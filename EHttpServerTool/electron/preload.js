@@ -40,5 +40,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('new-request', handler)
   },
 
+  // DevTools 日志转发
+  onDevLog: (callback) => {
+    const handler = (_event, data) => callback(data)
+    ipcRenderer.on('dev-log', handler)
+    return () => ipcRenderer.removeListener('dev-log', handler)
+  },
+
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 })

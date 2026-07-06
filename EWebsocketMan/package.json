@@ -1,5 +1,5 @@
 {
-  "name": "ewebsocketman",
+  "name": "EWebsocketMan",
   "version": "1.0.0",
   "description": "WebSocketMan - WebSocket 测试工具",
   "main": "dist-electron/main.js",

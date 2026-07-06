@@ -20,6 +20,15 @@ export interface RequestLog {
   body: string
 }
 
+/** 日志数据 */
+export interface LogData {
+  level: string
+  levelNum: number
+  message: string
+  timestamp: number
+  module: string
+}
+
 /** Electron 主进程暴露的 API */
 export interface ElectronAPI {
   // Server control
@@ -44,6 +53,7 @@ export interface ElectronAPI {
   onServerStopped: (callback: () => void) => () => void
   onServerError: (callback: (data: { message: string }) => void) => () => void
   onNewRequest: (callback: (data: RequestLog) => void) => () => void
+  onDevLog: (callback: (data: LogData) => void) => () => void
 
   removeAllListeners: (channel: string) => void
 }
