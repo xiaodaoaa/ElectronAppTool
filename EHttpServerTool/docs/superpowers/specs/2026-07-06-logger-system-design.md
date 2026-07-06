@@ -68,7 +68,7 @@ logger.fatal('Fatal, shutting down')
 - Rotation: by size, max 5MB per file
 - Retention: 3 backup files (total max ~20MB)
 - Filename pattern: `app.log` → `app-<timestamp>-<seq>.log`
-- Using `pino-file-transport` or `pino-roll`
+- Using `pino-roll` for size-based file rotation
 
 ### Log Event Hub
 - Internal `EventEmitter` fires on every log call
