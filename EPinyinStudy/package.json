@@ -1,0 +1,56 @@
+{
+  "name": "EPinyinStudy",
+  "version": "1.0.0",
+  "description": "小学一年级拼音学习",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:linux": "vite build && electron-builder --linux",
+    "pack": "vite build && electron-builder --win",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\""
+  },
+  "build": {
+    "appId": "com.pinyin.learning",
+    "productName": "拼音学习乐园",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "public/app.png",
+      "category": "Education"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "public/app.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "拼音学习乐园"
+    }
+  },
+  "keywords": ["pinyin", "education", "electron"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "vue": "^3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5",
+    "concurrently": "^9",
+    "electron": "^33",
+    "electron-builder": "^25",
+    "vite": "^6",
+    "wait-on": "^8"
+  }
+}
