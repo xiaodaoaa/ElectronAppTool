@@ -2,7 +2,7 @@
   <div class="pinyin-table">
     <h2 class="section-title">{{ title }}</h2>
     <div class="grid" :style="{ gridTemplateColumns: `repeat(${columns}, 1fr)` }">
-      <div v-for="item in items" :key="item.pinyin" class="card" @click="speak(item.pinyin)">
+      <div v-for="item in items" :key="item.pinyin" class="card" @click="speak(item)">
         <div class="pinyin">{{ item.char }}</div>
         <div class="example">{{ item.examples?.join('、') }}</div>
         <div v-if="item.type" class="badge">{{ item.type }}</div>
@@ -12,18 +12,16 @@
 </template>
 
 <script setup>
+import { speakPinyin } from '../utils/speech'
+
 defineProps({
   title: String,
   items: Array,
   columns: { type: Number, default: 4 },
 })
 
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'zh-CN'; u.rate = 0.8
-    speechSynthesis.speak(u)
-  }
+function speak(item) {
+  speakPinyin(item, 0.8)
 }
 </script>
 

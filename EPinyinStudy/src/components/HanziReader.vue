@@ -25,6 +25,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { speakZh } from '../utils/speech'
 
 const props = defineProps({ hanziList: Array })
 const filter = ref('全部')
@@ -37,11 +38,7 @@ const filteredList = computed(() => {
 })
 
 function speak(text) {
-  if ('speechSynthesis' in window) {
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'zh-CN'; u.rate = 0.7
-    speechSynthesis.speak(u)
-  }
+  speakZh(text, 0.7)
 }
 </script>
 
