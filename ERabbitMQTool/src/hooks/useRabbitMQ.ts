@@ -35,6 +35,9 @@ export function useRabbitMQ(callbacks: UseRabbitMQCallbacks) {
       api.onPublishConfirmed((result: { success: boolean; message?: string }) => {
         callbacksRef.current.onPublishConfirmed?.(result)
       }),
+      api.onLogEvent((entry: LogEntry) => {
+        callbacksRef.current.onLogEvent?.(entry)
+      }),
     ]
 
     unsubsRef.current = unsubs

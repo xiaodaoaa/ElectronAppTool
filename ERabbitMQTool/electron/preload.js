@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('publish-confirmed', handler)
     return () => ipcRenderer.removeListener('publish-confirmed', handler)
   },
+  onLogEvent: (callback) => {
+    const handler = (_event, data) => callback(data)
+    ipcRenderer.on('log-event', handler)
+    return () => ipcRenderer.removeListener('log-event', handler)
+  },
 
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 })

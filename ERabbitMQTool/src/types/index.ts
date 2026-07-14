@@ -62,6 +62,7 @@ export interface ElectronAPI {
   onConnectionError: (callback: (data: { message: string }) => void) => () => void
   onMessageReceived: (callback: (data: ReceivedMessage) => void) => () => void
   onPublishConfirmed: (callback: (data: { success: boolean; message?: string }) => void) => () => void
+  onLogEvent: (callback: (data: LogEntry) => void) => () => void
 
   removeAllListeners: (channel: string) => void
 }
