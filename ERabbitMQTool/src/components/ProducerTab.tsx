@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Radio, Input, Button, Switch, Select, Space, Divider, Typography } from 'antd'
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
-import type { PublishTarget, MessageProperties } from '../types'
+import type { PublishTarget, MessageProperties, ProducerState } from '../types'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -9,6 +9,8 @@ const { Text } = Typography
 interface ProducerTabProps {
   connected: boolean
   onPublish: (target: PublishTarget) => Promise<{ success: boolean }>
+  defaults?: ProducerState
+  onChange?: (state: ProducerState) => void
 }
 
 const defaultProperties: MessageProperties = {
@@ -18,15 +20,29 @@ const defaultProperties: MessageProperties = {
   headers: {},
 }
 
-const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish }) => {
-  const [targetMode, setTargetMode] = useState<'exchange' | 'queue'>('exchange')
-  const [exchange, setExchange] = useState('')
-  const [routingKey, setRoutingKey] = useState('')
-  const [queue, setQueue] = useState('')
+const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, defaults, onChange }) => {
+  const [targetMode, setTargetMode] = useState<'exchange' | 'queue'>(defaults?.targetMode ?? 'exchange')
+  const [exchange, setExchange] = useState(defaults?.exchange ?? '')
+  const [routingKey, setRoutingKey] = useState(defaults?.routingKey ?? '')
+  const [queue, setQueue] = useState(defaults?.queue ?? '')
   const [message, setMessage] = useState('')
-  const [properties, setProperties] = useState<MessageProperties>(defaultProperties)
+  const [properties, setProperties] = useState<MessageProperties>(defaults?.properties ?? defaultProperties)
   const [headers, setHeaders] = useState<{ key: string; value: string }[]>([])
   const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    if (defaults) {
+      setTargetMode(defaults.targetMode)
+      setExchange(defaults.exchange)
+      setRoutingKey(defaults.routingKey)
+      setQueue(defaults.queue)
+      setProperties(defaults.properties)
+    }
+  }, [defaults])
+
+  useEffect(() => {
+    onChange?.({ targetMode, exchange, routingKey, queue, properties })
+  }, [targetMode, exchange, routingKey, queue, properties, onChange])
 
   const handleSend = useCallback(async (msg?: string) => {
     const content = msg ?? message

@@ -48,6 +48,24 @@ export interface LogEntry {
   detail: string
 }
 
+export interface ProducerState {
+  targetMode: 'exchange' | 'queue'
+  exchange: string
+  routingKey: string
+  queue: string
+  properties: MessageProperties
+}
+
+export interface AppConfig {
+  host: string
+  port: number
+  vhost: string
+  username: string
+  password: string
+  producer?: ProducerState
+  consumerQueue?: string
+}
+
 export interface ElectronAPI {
   connect: (config: ConnectionConfig) => Promise<{ success: boolean; serverInfo?: ServerInfo }>
   disconnect: () => Promise<{ success: boolean }>

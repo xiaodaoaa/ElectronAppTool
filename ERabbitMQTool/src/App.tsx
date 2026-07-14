@@ -9,7 +9,7 @@ import { useConfig } from './hooks/useConfig'
 import type { ServerInfo, ReceivedMessage, LogEntry } from './types'
 
 const App: React.FC = () => {
-  const { config, updateConfig, loaded } = useConfig()
+  const { config, updateConfig, producer, updateProducer, consumerQueue, updateConsumerQueue, loaded } = useConfig()
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null)
@@ -100,7 +100,7 @@ const App: React.FC = () => {
           <div className="tab-layout">
             <div className="tab-left">
               <div style={{ display: activeTab === 'producer' ? 'flex' : 'none', flexDirection: 'column', gap: 12, height: '100%' }}>
-                <ProducerTab connected={connected} onPublish={publish} />
+                <ProducerTab connected={connected} onPublish={publish} defaults={producer} onChange={updateProducer} />
               </div>
               <div style={{ display: activeTab === 'consumer' ? 'flex' : 'none', flexDirection: 'column', gap: 12, height: '100%' }}>
                 <ConsumerTab
@@ -108,6 +108,8 @@ const App: React.FC = () => {
                   messages={messages}
                   onSubscribe={subscribe}
                   onUnsubscribe={unsubscribe}
+                  defaultQueue={consumerQueue}
+                  onQueueChange={updateConsumerQueue}
                 />
               </div>
             </div>

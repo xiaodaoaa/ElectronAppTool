@@ -168,11 +168,10 @@ function setupIPC() {
           consumerTag: msg.fields.consumerTag,
           timestamp: new Date().toISOString(),
         }
-        channel.ack(msg)
         sendToRenderer('message-received', received)
         const summary = received.message.length > 50 ? received.message.slice(0, 50) + '...' : received.message
         sendToRenderer('log-event', { type: 'receive', detail: `[←queue ${queue}] ${summary}` })
-      }, { noAck: false })
+      }, { noAck: true })
 
       consumerTags.add(consumeResult.consumerTag)
       sendToRenderer('log-event', { type: 'subscribe', detail: `queue=${queue} consumerTag=${consumeResult.consumerTag}` })

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Input, Button, Tag, Typography } from 'antd'
 import type { ReceivedMessage } from '../types'
 
@@ -9,12 +9,23 @@ interface ConsumerTabProps {
   messages: ReceivedMessage[]
   onSubscribe: (queue: string) => Promise<{ success: boolean; consumerTag?: string }>
   onUnsubscribe: (consumerTag: string) => Promise<{ success: boolean }>
+  defaultQueue?: string
+  onQueueChange?: (queue: string) => void
 }
 
-const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscribe, onUnsubscribe }) => {
-  const [queue, setQueue] = useState('')
+const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscribe, onUnsubscribe, defaultQueue, onQueueChange }) => {
+  const [queue, setQueue] = useState(defaultQueue ?? '')
   const [consumerTag, setConsumerTag] = useState<string | null>(null)
   const [subscribing, setSubscribing] = useState(false)
+
+  useEffect(() => {
+    if (defaultQueue) setQueue(defaultQueue)
+  }, [defaultQueue])
+
+  const handleQueueChange = useCallback((value: string) => {
+    setQueue(value)
+    onQueueChange?.(value)
+  }, [onQueueChange])
 
   const handleSubscribe = useCallback(async () => {
     if (!queue.trim()) return
@@ -38,7 +49,7 @@ const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscr
         <Input
           placeholder="Queue 名"
           value={queue}
-          onChange={(e) => setQueue(e.target.value)}
+          onChange={(e) => handleQueueChange(e.target.value)}
           disabled={!connected || !!consumerTag}
           style={{ flex: 1 }}
         />
