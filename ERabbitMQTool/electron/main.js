@@ -101,6 +101,100 @@ function setupIPC() {
     await cleanUp()
     return { success: true }
   })
+
+  ipcMain.handle('publish', async (_event, target) => {
+    if (!channel) {
+      sendToRenderer('publish-confirmed', { success: false, message: '未连接' })
+      return { success: false }
+    }
+
+    try {
+      const props = {
+        persistent: target.properties.persistent,
+        contentType: target.properties.contentType || 'text/plain',
+        priority: target.properties.priority || 0,
+        headers: target.properties.headers || {},
+      }
+      if (target.properties.messageId) props.messageId = target.properties.messageId
+      if (target.properties.replyTo) props.replyTo = target.properties.replyTo
+
+      let exchange = ''
+      let routingKey = ''
+      let displayTarget = ''
+
+      if (target.target === 'exchange') {
+        exchange = target.exchange || ''
+        routingKey = target.routingKey || ''
+        displayTarget = `exchange ${exchange}`
+      } else {
+        exchange = ''
+        routingKey = target.queue || ''
+        displayTarget = `queue ${target.queue}`
+      }
+
+      const buf = Buffer.from(target.message || '', 'utf-8')
+      channel.publish(exchange, routingKey, buf, props)
+
+      sendToRenderer('publish-confirmed', { success: true })
+      const summary = target.message.length > 50 ? target.message.slice(0, 50) + '...' : target.message
+      sendToRenderer('log-event', { type: 'send', detail: `[→${displayTarget}] ${summary}` })
+
+      return { success: true }
+    } catch (err) {
+      sendToRenderer('publish-confirmed', { success: false, message: err.message })
+      return { success: false }
+    }
+  })
+
+  ipcMain.handle('subscribe', async (_event, queue) => {
+    if (!channel) return { success: false }
+    if (!queue || !queue.trim()) return { success: false }
+
+    try {
+      const consumeResult = await channel.consume(queue, (msg) => {
+        if (!msg) return
+        const received = {
+          queue,
+          message: msg.content.toString('utf-8'),
+          properties: {
+            contentType: msg.properties.contentType,
+            priority: msg.properties.priority,
+            messageId: msg.properties.messageId,
+            replyTo: msg.properties.replyTo,
+            headers: msg.properties.headers,
+            deliveryTag: msg.fields.deliveryTag,
+          },
+          consumerTag: msg.fields.consumerTag,
+          timestamp: new Date().toISOString(),
+        }
+        channel.ack(msg)
+        sendToRenderer('message-received', received)
+        const summary = received.message.length > 50 ? received.message.slice(0, 50) + '...' : received.message
+        sendToRenderer('log-event', { type: 'receive', detail: `[←queue ${queue}] ${summary}` })
+      }, { noAck: false })
+
+      consumerTags.add(consumeResult.consumerTag)
+      sendToRenderer('log-event', { type: 'subscribe', detail: `queue=${queue} consumerTag=${consumeResult.consumerTag}` })
+
+      return { success: true, consumerTag: consumeResult.consumerTag }
+    } catch (err) {
+      sendToRenderer('log-event', { type: 'error', detail: `订阅失败: ${err.message}` })
+      return { success: false }
+    }
+  })
+
+  ipcMain.handle('unsubscribe', async (_event, consumerTag) => {
+    if (!channel) return { success: false }
+
+    try {
+      await channel.cancel(consumerTag)
+      consumerTags.delete(consumerTag)
+      sendToRenderer('log-event', { type: 'subscribe', detail: `已取消 consumerTag=${consumerTag}` })
+      return { success: true }
+    } catch (err) {
+      return { success: false }
+    }
+  })
 }
 
 app.whenReady().then(() => {
