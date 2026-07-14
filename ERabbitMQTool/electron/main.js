@@ -75,8 +75,12 @@ function setupIPC() {
 
       channel = await connection.createChannel()
 
-      connection.on('error', () => {}) // prevent duplicate error
-      channel.on('error', () => {})    // prevent duplicate error
+      channel.on('error', (err) => {
+        sendToRenderer('log-event', { type: 'error', detail: `[DEBUG-chanerr] ${err.message}` })
+      })
+      channel.on('close', () => {
+        sendToRenderer('log-event', { type: 'error', detail: '[DEBUG-chanerr] channel closed' })
+      })
 
       isConnecting = false
 
@@ -134,7 +138,13 @@ function setupIPC() {
       }
 
       const buf = Buffer.from(target.message || '', 'utf-8')
-      channel.publish(exchange, routingKey, buf, props)
+      const pubResult = channel.publish(exchange, routingKey, buf, props)
+      sendToRenderer('log-event', { type: 'send', detail: `[DEBUG-pub] exchange="${exchange}" routingKey="${routingKey}" result=${pubResult}` })
+
+      if (!pubResult) {
+        sendToRenderer('publish-confirmed', { success: false, message: '消息未入队列（缓冲区满或通道关闭）' })
+        return { success: false }
+      }
 
       sendToRenderer('publish-confirmed', { success: true })
       const summary = target.message.length > 50 ? target.message.slice(0, 50) + '...' : target.message
