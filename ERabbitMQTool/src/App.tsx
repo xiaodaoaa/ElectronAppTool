@@ -99,16 +99,17 @@ const App: React.FC = () => {
         <div className="tab-content">
           <div className="tab-layout">
             <div className="tab-left">
-              {activeTab === 'producer' ? (
+              <div style={{ display: activeTab === 'producer' ? 'flex' : 'none', flexDirection: 'column', gap: 12, height: '100%' }}>
                 <ProducerTab connected={connected} onPublish={publish} />
-              ) : (
+              </div>
+              <div style={{ display: activeTab === 'consumer' ? 'flex' : 'none', flexDirection: 'column', gap: 12, height: '100%' }}>
                 <ConsumerTab
                   connected={connected}
                   messages={messages}
                   onSubscribe={subscribe}
                   onUnsubscribe={unsubscribe}
                 />
-              )}
+              </div>
             </div>
             <div className="tab-right">
               <LogPanel logs={logs} />
