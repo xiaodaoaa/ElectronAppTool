@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
+const fs = require('fs')
 const amqplib = require('amqplib')
 
 let mainWindow = null
@@ -193,6 +194,29 @@ function setupIPC() {
       return { success: true }
     } catch (err) {
       return { success: false }
+    }
+  })
+
+  ipcMain.handle('save-config', async (_event, config) => {
+    try {
+      const configPath = path.join(app.getPath('userData'), 'config.json')
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+      return { success: true }
+    } catch (err) {
+      return { success: false }
+    }
+  })
+
+  ipcMain.handle('load-config', async () => {
+    try {
+      const configPath = path.join(app.getPath('userData'), 'config.json')
+      if (!fs.existsSync(configPath)) {
+        return { success: true, config: null }
+      }
+      const data = fs.readFileSync(configPath, 'utf-8')
+      return { success: true, config: JSON.parse(data) }
+    } catch (err) {
+      return { success: true, config: null }
     }
   })
 }
