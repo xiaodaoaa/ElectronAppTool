@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 EWebsocketMan — Electron desktop app replicating WebSocketMan v1.0.9, a WebSocket testing tool with server and client modes.
 
-**Tech stack:** Electron 28 + Vue 3 (Composition API) + Vite 5 + ws (WebSocket library)
+**Tech stack:** Electron 22 (Windows 7 compatible) + Vue 3 (Composition API) + Vite 5 + ws (WebSocket library)
 
 ## Commands
 
