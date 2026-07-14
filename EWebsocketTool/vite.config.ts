@@ -6,6 +6,7 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist',
+    target: 'chrome108',
   },
   server: {
     port: 5173,
