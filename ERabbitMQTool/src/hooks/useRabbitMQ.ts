@@ -1,4 +1,3 @@
-// src/hooks/useRabbitMQ.ts
 import { useEffect, useRef, useCallback } from 'react'
 import type { ConnectionConfig, ServerInfo, ReceivedMessage, LogEntry, PublishTarget } from '../types'
 
@@ -12,6 +11,8 @@ interface UseRabbitMQCallbacks {
 }
 
 export function useRabbitMQ(callbacks: UseRabbitMQCallbacks) {
+  const callbacksRef = useRef(callbacks)
+  callbacksRef.current = callbacks
   const unsubsRef = useRef<(() => void)[]>([])
 
   useEffect(() => {
@@ -20,19 +21,19 @@ export function useRabbitMQ(callbacks: UseRabbitMQCallbacks) {
 
     const unsubs: (() => void)[] = [
       api.onConnected((data: { serverInfo: ServerInfo }) => {
-        callbacks.onConnected?.(data.serverInfo)
+        callbacksRef.current.onConnected?.(data.serverInfo)
       }),
       api.onDisconnected((data: { reason: string }) => {
-        callbacks.onDisconnected?.(data.reason)
+        callbacksRef.current.onDisconnected?.(data.reason)
       }),
       api.onConnectionError((data: { message: string }) => {
-        callbacks.onConnectionError?.(data.message)
+        callbacksRef.current.onConnectionError?.(data.message)
       }),
       api.onMessageReceived((msg: ReceivedMessage) => {
-        callbacks.onMessageReceived?.(msg)
+        callbacksRef.current.onMessageReceived?.(msg)
       }),
       api.onPublishConfirmed((result: { success: boolean; message?: string }) => {
-        callbacks.onPublishConfirmed?.(result)
+        callbacksRef.current.onPublishConfirmed?.(result)
       }),
     ]
 

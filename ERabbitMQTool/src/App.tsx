@@ -1,6 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { ConfigProvider, Tabs } from 'antd'
-import type { TabsProps } from 'antd'
 import ConnectionPanel from './components/ConnectionPanel'
 import ProducerTab from './components/ProducerTab'
 import ConsumerTab from './components/ConsumerTab'
@@ -71,31 +70,6 @@ const App: React.FC = () => {
   }, [disconnect])
 
   const serverLabel = serverInfo ? `${serverInfo.host}:${serverInfo.port}` : ''
-
-  const tabItems: TabsProps['items'] = [
-    {
-      key: 'producer',
-      label: '生产者',
-      children: (
-        <ProducerTab
-          connected={connected}
-          onPublish={publish}
-        />
-      ),
-    },
-    {
-      key: 'consumer',
-      label: '消费者',
-      children: (
-        <ConsumerTab
-          connected={connected}
-          messages={messages}
-          onSubscribe={subscribe}
-          onUnsubscribe={unsubscribe}
-        />
-      ),
-    },
-  ]
 
   return (
     <ConfigProvider theme={{ token: { colorPrimary: '#1677ff' } }}>
