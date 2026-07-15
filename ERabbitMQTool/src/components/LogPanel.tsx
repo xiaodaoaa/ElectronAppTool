@@ -57,9 +57,6 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, onClear }) => {
     closeMenu()
   }, [onClear, closeMenu])
 
-  // 时间戳兜底：main 进程发来的 log-event 不带 time，渲染时补上当前时间
-  const formatTime = (t?: string) => t ?? new Date().toLocaleTimeString()
-
   return (
     <div className="log-panel">
       <div className="log-panel-header">消息日志</div>
@@ -69,7 +66,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, onClear }) => {
         ) : (
           logs.map((entry, i) => (
             <div key={i} className={`log-entry log-${entry.type}`}>
-              <span className="log-time">{formatTime(entry.time)}</span>
+              <span className="log-time">{entry.time}</span>
               <span className="log-direction">{typeLabel[entry.type]}</span>
               <span className="log-message">{entry.detail}</span>
             </div>

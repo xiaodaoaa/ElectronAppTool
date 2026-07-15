@@ -56,7 +56,8 @@ const App: React.FC = () => {
   }, [addLog])
 
   const onLogEvent = useCallback((entry: LogEntry) => {
-    addLog(entry)
+    // main 进程发来的 log-event 不带 time，在此固定为接收时刻，避免渲染时动态计算导致所有日志时间被刷成最新
+    addLog({ ...entry, time: entry.time ?? new Date().toLocaleTimeString() })
   }, [addLog])
 
   const { connect, disconnect, publish, subscribe, unsubscribe } = useRabbitMQ({
