@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Layout
 
-This is a **monorepo of four independent Electron desktop tools** for network debugging and education. There is **no root `package.json`** — each subdirectory is a self-contained app with its own `package.json`, dependencies, and `node_modules`. Always `cd` into the relevant subproject before running any command.
+This is a **monorepo of five independent Electron desktop tools** for network debugging and education. There is **no root `package.json`** — each subdirectory is a self-contained app with its own `package.json`, dependencies, and `node_modules`. Always `cd` into the relevant subproject before running any command.
 
 | Subproject | Stack | Win7 Compat | Build Approach | Purpose |
 |------------|-------|-------------|----------------|---------|
@@ -12,6 +12,7 @@ This is a **monorepo of four independent Electron desktop tools** for network de
 | `EWebsocketTool/` | Electron 22 + React 18 + TS + Ant Design 5 + Vite 6 | ✅ | Standalone `electron/` dir | WebSocket client (browser native) + server (`ws` lib) in one GUI |
 | `EWebsocketMan/` | Electron 22 + Vue 3 (Composition API) + Vite 5 | ✅ | `vite-plugin-electron` builds `src/main/` + `src/preload/` | WebSocketMan v1.0.9 replica — WS server/client modes |
 | `EPinyinStudy/` | Electron 33 + Vue 3 + Vite 6 | ❌ | Standalone `electron/` dir | First-grade Chinese pinyin education: initials, finals, hanzi, quiz |
+| `ERabbitMQTool/` | Electron 22 + React 18 + TS + Ant Design 5 + Vite 6 + `amqplib` | ✅ | Standalone `electron/` dir | RabbitMQ debugging: connection management, producer publish, consumer subscribe (queue/exchange modes), SSL support |
 
 ## Commands (run inside a subproject)
 
@@ -20,17 +21,17 @@ This is a **monorepo of four independent Electron desktop tools** for network de
 npm install
 
 # Development — Vite dev server + Electron window
-npm run dev          # EHttpServerTool / EWebsocketTool / EWebsocketMan
+npm run dev          # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool
 npm run electron:dev # EPinyinStudy (uses different script name)
 
 # Build (Vite → dist/)
 npm run build
 
 # Preview Vite build
-npm run preview      # EHttpServerTool / EWebsocketTool / EWebsocketMan only
+npm run preview      # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool only
 
 # Package Windows NSIS installer → release/
-npm run pack         # EHttpServerTool / EWebsocketTool / EWebsocketMan
+npm run pack         # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool
 npm run pack         # EPinyinStudy → runs `vite build && electron-builder --win`
 
 # Linux packaging (EPinyinStudy only)
@@ -43,10 +44,10 @@ All subprojects use `concurrently` + `wait-on`: Vite starts first (port 5173, `s
 
 ### pack command variations
 
-- **EWebsocketTool** and **EWebsocketMan** (Win7-compatible): `pack` includes `-c.electronDist="node_modules/electron/dist" -c.electronVersion="22.3.27"` to force electron-builder to use the locally-installed Electron 22 binary rather than downloading Electron 33+.
+- **EWebsocketTool**, **EWebsocketMan** and **ERabbitMQTool** (Win7-compatible): `pack` includes `-c.electronDist="node_modules/electron/dist" -c.electronVersion="22.3.27"` to force electron-builder to use the locally-installed Electron 22 binary rather than downloading Electron 33+.
 - **EHttpServerTool** and **EPinyinStudy** (not Win7): `pack` does NOT need the electronDist override — electron-builder uses whatever Electron version is in `node_modules`.
 
-## Architecture (shared across all four apps)
+## Architecture (shared across all five apps)
 
 ### Three-process model
 
@@ -71,7 +72,7 @@ Renderer (src/ — React TSX or Vue 3)
 
 ### Two build approaches
 
-**Approach A — Standalone** (EHttpServerTool, EWebsocketTool, EPinyinStudy):
+**Approach A — Standalone** (EHttpServerTool, EWebsocketTool, EPinyinStudy, ERabbitMQTool):
 - Main/preload source lives in `electron/` directory at project root
 - Vite builds ONLY the renderer (`src/` → `dist/`)
 - `"main": "electron/main.js"` in package.json — Electron loads source directly
@@ -98,20 +99,21 @@ Every app uses the same two flavors, always through `window.electronAPI`:
 
 ### Module structure (main process)
 
-Three of four apps keep networking logic separate from the Electron wiring:
+Three of five apps keep networking logic separate from the Electron wiring:
 
 - **EHttpServerTool**: `electron/modules/` with separate files for HTTP server, path config, request logging, and file logging — `main.js` wires them together
 - **EWebsocketTool** / **EWebsocketMan**: Server/client logic is inline in `main.js` since the WS state is simpler
+- **ERabbitMQTool**: RabbitMQ connection/channel/consumer logic is inline in `main.js` (amqplib operations + IPC registration)
 - **EPinyinStudy**: Minimal main process (no networking) — just window creation and platform detection
 
 When adding server behavior to EHttpServerTool, edit the manager classes in `electron/modules/`, not `main.js`.
 
 ### Windows 7 compatibility
 
-Two apps (EWebsocketTool, EWebsocketMan) run on Windows 7 x64 via Electron 22.3.27 — the last Electron version with Win7 support (Electron 23+ dropped it). The downgrade affects only:
+Three apps (EWebsocketTool, EWebsocketMan, ERabbitMQTool) run on Windows 7 x64 via Electron 22.3.27 — the last Electron version with Win7 support (Electron 23+ dropped it). The downgrade affects only:
 - `electron` devDependency version
 - `pack` script electronDist override
-- Build target may need adjustment (`vite.config.ts` `build.target` for EWebsocketTool is `chrome108`)
+- Build target may need adjustment (`vite.config.ts` `build.target` for EWebsocketTool and ERabbitMQTool is `chrome108`)
 
 ### IPv4 normalization
 
@@ -122,7 +124,7 @@ All three WS/HTTP apps strip the IPv6-mapped prefix from `remoteAddress`:
 
 ### Config persistence
 
-Configs (server settings, connection URLs) are saved to `app.getPath('userData')` as JSON files. EWebsocketMan auto-saves with 300ms debounce. EHttpServerTool uses a PathConfigManager class.
+Configs (server settings, connection URLs) are saved to `app.getPath('userData')` as JSON files. EWebsocketMan auto-saves with 300ms debounce. EHttpServerTool uses a PathConfigManager class. ERabbitMQTool saves connection config (host/port/vhost/credentials/SSL options) to `config.json`.
 
 ## Subproject specifics
 
@@ -138,3 +140,16 @@ The only app with tests — three `*.test.js` files at project root (`http-serve
 - No state management (Vuex/Pinia) — all state is local `ref`s, data flows via props/$emit
 - Has Linux packaging support (`electron:linux` script, AppImage target)
 - Uses `base: './'` in Vite config for Electron `file://` path resolution
+
+### ERabbitMQTool
+
+RabbitMQ debugging tool built on `amqplib`. Main process manages connection/channel/consumerTags lifecycle inline in `electron/main.js` (no separate modules dir).
+
+- **Connection**: supports `amqp`/`amqps` protocols; SSL is opt-in via `sslEnabled` + `sslValidateServerCert` (controls `rejectUnauthorized`); connection config persisted to `config.json` in `userData`
+- **Producer** (`publish` IPC): publishes to a queue (asserts durable queue first) or exchange; supports `persistent`, `contentType`, `priority`, `headers`, `messageId`, `replyTo` properties
+- **Consumer** (`subscribe` IPC): two modes —
+  - Queue mode: `assertQueue` + `consume` with `noAck: true`; warns if existing consumers detected (round-robin risk)
+  - Exchange mode: creates exclusive temporary queue, binds to exchange, then consumes
+- **Cleanup**: `cleanUp()` cancels all consumer tags, closes channel and connection; called on disconnect, connection error/close, and app quit
+- **Events sent to renderer**: `connected`, `disconnected`, `connection-error`, `message-received`, `publish-confirmed`, `log-event`
+- Renderer components: `ConnectionPanel`, `ProducerTab`, `ConsumerTab`, `LogPanel` (React + Ant Design)
