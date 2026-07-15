@@ -166,6 +166,7 @@ function setupIPC() {
 
     const mode = typeof params === 'string' ? 'queue' : params.mode
     const target = typeof params === 'string' ? params : params.target
+    const bindingKey = typeof params === 'string' ? '' : (params.bindingKey || '')
     if (!target || !target.trim()) return { success: false }
 
     try {
@@ -175,9 +176,9 @@ function setupIPC() {
       if (mode === 'exchange') {
         const tmp = await channel.assertQueue('', { exclusive: true })
         consumeQueue = tmp.queue
-        await channel.bindQueue(consumeQueue, target, '')
+        await channel.bindQueue(consumeQueue, target, bindingKey)
         displayLabel = `exchange ${target}`
-        sendToRenderer('log-event', { type: 'subscribe', detail: `已创建临时队列 ${consumeQueue} 并绑定到 ${displayLabel}` })
+        sendToRenderer('log-event', { type: 'subscribe', detail: `已创建临时队列 ${consumeQueue} 并绑定到 ${displayLabel}（bindingKey='${bindingKey}'）` })
       } else {
         await channel.assertQueue(target, { durable: true })
         const qInfo = await channel.checkQueue(target)

@@ -9,7 +9,7 @@ import { useConfig } from './hooks/useConfig'
 import type { ServerInfo, ReceivedMessage, LogEntry } from './types'
 
 const App: React.FC = () => {
-  const { config, updateConfig, producer, updateProducer, consumerQueue, updateConsumerQueue, loaded } = useConfig()
+  const { config, updateConfig, producer, updateProducer, consumerQueue, updateConsumerQueue, consumerBindingKey, updateConsumerBindingKey, loaded } = useConfig()
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null)
@@ -110,6 +110,8 @@ const App: React.FC = () => {
                   onUnsubscribe={unsubscribe}
                   defaultQueue={consumerQueue}
                   onQueueChange={updateConsumerQueue}
+                  defaultBindingKey={consumerBindingKey}
+                  onBindingKeyChange={updateConsumerBindingKey}
                 />
               </div>
             </div>

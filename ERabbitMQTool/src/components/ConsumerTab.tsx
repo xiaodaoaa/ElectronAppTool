@@ -7,15 +7,19 @@ const { Text } = Typography
 interface ConsumerTabProps {
   connected: boolean
   messages: ReceivedMessage[]
-  onSubscribe: (params: { mode: 'queue' | 'exchange'; target: string }) => Promise<{ success: boolean; consumerTag?: string }>
+  onSubscribe: (params: { mode: 'queue' | 'exchange'; target: string; bindingKey?: string }) => Promise<{ success: boolean; consumerTag?: string }>
   onUnsubscribe: (consumerTag: string) => Promise<{ success: boolean }>
   defaultQueue?: string
   onQueueChange?: (queue: string) => void
+  defaultBindingKey?: string
+  onBindingKeyChange?: (key: string) => void
 }
 
-const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscribe, onUnsubscribe, defaultQueue, onQueueChange }) => {
+const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscribe, onUnsubscribe, defaultQueue, onQueueChange, defaultBindingKey, onBindingKeyChange }) => {
   // target 受控：由父组件 useConfig.consumerQueue 单一持有，避免本地副本与 initializedRef 守卫导致的加载值丢失
   const target = defaultQueue ?? ''
+  // bindingKey 同样受控，持久化到 config.json；仅 Exchange 模式有意义
+  const bindingKey = defaultBindingKey ?? ''
   const [mode, setMode] = useState<'queue' | 'exchange'>('queue')
   const [consumerTag, setConsumerTag] = useState<string | null>(null)
   const [subscribing, setSubscribing] = useState(false)
@@ -24,15 +28,23 @@ const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscr
     onQueueChange?.(value)
   }, [onQueueChange])
 
+  const handleBindingKeyChange = useCallback((value: string) => {
+    onBindingKeyChange?.(value)
+  }, [onBindingKeyChange])
+
   const handleSubscribe = useCallback(async () => {
     if (!target.trim()) return
     setSubscribing(true)
-    const result = await onSubscribe({ mode, target: target.trim() })
+    const result = await onSubscribe({
+      mode,
+      target: target.trim(),
+      bindingKey: mode === 'exchange' ? bindingKey.trim() : undefined,
+    })
     if (result.success && result.consumerTag) {
       setConsumerTag(result.consumerTag)
     }
     setSubscribing(false)
-  }, [mode, target, onSubscribe])
+  }, [mode, target, bindingKey, onSubscribe])
 
   const handleUnsubscribe = useCallback(async () => {
     if (!consumerTag) return
@@ -58,6 +70,15 @@ const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscr
         <Text type="secondary" style={{ fontSize: 12 }}>
           将创建临时独占队列并绑定到 exchange，不会与其他消费者竞争消息
         </Text>
+      )}
+
+      {mode === 'exchange' && (
+        <Input
+          placeholder="Binding Key（direct 精确匹配；topic 用 * / # 模式；fanout 忽略）"
+          value={bindingKey}
+          onChange={(e) => handleBindingKeyChange(e.target.value)}
+          disabled={!connected || !!consumerTag}
+        />
       )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

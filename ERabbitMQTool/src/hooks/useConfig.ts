@@ -28,6 +28,7 @@ export function useConfig() {
   const [config, setConfig] = useState<ConnectionConfig>(DEFAULT_CONFIG)
   const [producer, setProducer] = useState<ProducerState>(DEFAULT_PRODUCER)
   const [consumerQueue, setConsumerQueue] = useState('')
+  const [consumerBindingKey, setConsumerBindingKey] = useState('')
   const [loaded, setLoaded] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -47,6 +48,7 @@ export function useConfig() {
         }))
         if (c.producer) setProducer(c.producer)
         if (c.consumerQueue) setConsumerQueue(c.consumerQueue)
+        if (c.consumerBindingKey) setConsumerBindingKey(c.consumerBindingKey)
       }
       setLoaded(true)
     })
@@ -56,10 +58,10 @@ export function useConfig() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       const api = (window as any).electronAPI
-      const full: AppConfig = { ...config, producer, consumerQueue }
+      const full: AppConfig = { ...config, producer, consumerQueue, consumerBindingKey }
       api.saveConfig(full)
     }, 300)
-  }, [config, producer, consumerQueue])
+  }, [config, producer, consumerQueue, consumerBindingKey])
 
   const updateConfig = useCallback((partial: Partial<ConnectionConfig>) => {
     setConfig((prev) => ({ ...prev, ...partial }))
@@ -73,9 +75,13 @@ export function useConfig() {
     setConsumerQueue(queue)
   }, [])
 
+  const updateConsumerBindingKey = useCallback((key: string) => {
+    setConsumerBindingKey(key)
+  }, [])
+
   useEffect(() => {
     if (loaded) save()
-  }, [config, producer, consumerQueue, loaded, save])
+  }, [config, producer, consumerQueue, consumerBindingKey, loaded, save])
 
-  return { config, updateConfig, producer, updateProducer, consumerQueue, updateConsumerQueue, loaded }
+  return { config, updateConfig, producer, updateProducer, consumerQueue, updateConsumerQueue, consumerBindingKey, updateConsumerBindingKey, loaded }
 }

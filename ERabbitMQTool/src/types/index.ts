@@ -66,15 +66,16 @@ export interface AppConfig {
   password: string
   producer?: ProducerState
   consumerQueue?: string
+  consumerBindingKey?: string
 }
 
 export interface ElectronAPI {
   connect: (config: ConnectionConfig) => Promise<{ success: boolean; serverInfo?: ServerInfo }>
   disconnect: () => Promise<{ success: boolean }>
   publish: (target: PublishTarget) => Promise<{ success: boolean }>
-  subscribe: (params: { mode: 'queue' | 'exchange'; target: string }) => Promise<{ success: boolean; consumerTag?: string }>
+  subscribe: (params: { mode: 'queue' | 'exchange'; target: string; bindingKey?: string }) => Promise<{ success: boolean; consumerTag?: string }>,
   unsubscribe: (consumerTag: string) => Promise<{ success: boolean }>
-  saveConfig: (config: ConnectionConfig & { producer?: Record<string, unknown>; consumerQueue?: string }) => Promise<{ success: boolean }>
+  saveConfig: (config: ConnectionConfig & { producer?: Record<string, unknown>; consumerQueue?: string; consumerBindingKey?: string }) => Promise<{ success: boolean }>
   loadConfig: () => Promise<{ success: boolean; config?: Record<string, unknown> | null }>
 
   onConnected: (callback: (data: { serverInfo: ServerInfo }) => void) => () => void
