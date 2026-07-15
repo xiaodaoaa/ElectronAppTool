@@ -163,6 +163,7 @@ function setupIPC() {
 
     try {
       const consumeResult = await channel.consume(queue, (msg) => {
+        sendToRenderer('log-event', { type: 'receive', detail: `[DEBUG-consume] callback fired, msg=${msg ? msg.content.toString('utf-8').slice(0, 30) : 'null'}` })
         if (!msg) return
         const received = {
           queue,
