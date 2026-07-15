@@ -6,7 +6,7 @@ const amqplib = require('amqplib')
 let mainWindow = null
 let connection = null
 let channel = null
-const consumerTags = new Set()
+const consumerTags = new Map()
 let isConnecting = false
 
 function createWindow() {
@@ -35,7 +35,7 @@ function sendToRenderer(channel, data) {
 }
 
 async function cleanUp() {
-  for (const tag of consumerTags) {
+  for (const [tag] of consumerTags) {
     try {
       if (channel) await channel.cancel(tag)
     } catch (_) {}
@@ -76,10 +76,7 @@ function setupIPC() {
       channel = await connection.createChannel()
 
       channel.on('error', (err) => {
-        sendToRenderer('log-event', { type: 'error', detail: `[DEBUG-chanerr] ${err.message}` })
-      })
-      channel.on('close', () => {
-        sendToRenderer('log-event', { type: 'error', detail: '[DEBUG-chanerr] channel closed' })
+        sendToRenderer('log-event', { type: 'error', detail: `Channel error: ${err.message}` })
       })
 
       isConnecting = false
@@ -139,7 +136,6 @@ function setupIPC() {
 
       const buf = Buffer.from(target.message || '', 'utf-8')
       const pubResult = channel.publish(exchange, routingKey, buf, props)
-      sendToRenderer('log-event', { type: 'send', detail: `[DEBUG-pub] exchange="${exchange}" routingKey="${routingKey}" result=${pubResult}` })
 
       if (!pubResult) {
         sendToRenderer('publish-confirmed', { success: false, message: '消息未入队列（缓冲区满或通道关闭）' })
@@ -162,8 +158,16 @@ function setupIPC() {
     if (!queue || !queue.trim()) return { success: false }
 
     try {
+      for (const [existingTag, existingQueue] of consumerTags) {
+        if (existingQueue === queue) {
+          try {
+            await channel.cancel(existingTag)
+          } catch (_) {}
+          consumerTags.delete(existingTag)
+        }
+      }
+
       const consumeResult = await channel.consume(queue, (msg) => {
-        sendToRenderer('log-event', { type: 'receive', detail: `[DEBUG-consume] callback fired, msg=${msg ? msg.content.toString('utf-8').slice(0, 30) : 'null'}` })
         if (!msg) return
         const received = {
           queue,
@@ -184,7 +188,7 @@ function setupIPC() {
         sendToRenderer('log-event', { type: 'receive', detail: `[←queue ${queue}] ${summary}` })
       }, { noAck: true })
 
-      consumerTags.add(consumeResult.consumerTag)
+      consumerTags.set(consumeResult.consumerTag, queue)
       sendToRenderer('log-event', { type: 'subscribe', detail: `queue=${queue} consumerTag=${consumeResult.consumerTag}` })
 
       return { success: true, consumerTag: consumeResult.consumerTag }
