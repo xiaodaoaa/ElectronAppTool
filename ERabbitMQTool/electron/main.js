@@ -59,8 +59,17 @@ function setupIPC() {
     isConnecting = true
 
     try {
-      const url = `amqp://${config.username}:${config.password}@${config.host}:${config.port}${config.vhost}`
-      connection = await amqplib.connect(url)
+      const protocol = config.sslEnabled ? 'amqps' : 'amqp'
+      const url = `${protocol}://${config.username}:${config.password}@${config.host}:${config.port}${config.vhost}`
+
+      const connectOptions = {}
+      if (config.sslEnabled) {
+        connectOptions.tls = {
+          rejectUnauthorized: config.sslValidateServerCert !== false,
+        }
+      }
+
+      connection = await amqplib.connect(url, connectOptions)
 
       connection.on('error', (err) => {
         sendToRenderer('connection-error', { message: err.message })

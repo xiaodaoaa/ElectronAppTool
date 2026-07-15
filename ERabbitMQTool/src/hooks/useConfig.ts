@@ -7,6 +7,8 @@ const DEFAULT_CONFIG: ConnectionConfig = {
   vhost: '/',
   username: 'guest',
   password: 'guest',
+  sslEnabled: false,
+  sslValidateServerCert: true,
 }
 
 const DEFAULT_PRODUCER: ProducerState = {

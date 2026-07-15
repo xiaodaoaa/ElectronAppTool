@@ -1,5 +1,5 @@
 // src/components/ConnectionPanel.tsx
-import { Input, Button, Tag, Space, Form } from 'antd'
+import { Input, Button, Tag, Space, Form, Switch, Tooltip } from 'antd'
 import type { ConnectionConfig } from '../types'
 
 interface ConnectionPanelProps {
@@ -68,6 +68,26 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
           disabled={connected || connecting}
           placeholder="密码"
         />
+        <Form.Item label="SSL" {...formItemLayout} style={{ marginBottom: 0 }}>
+          <Switch
+            size="small"
+            checked={config.sslEnabled}
+            onChange={(v) => onConfigChange({ sslEnabled: v })}
+            disabled={connected || connecting}
+          />
+        </Form.Item>
+        {config.sslEnabled && (
+          <Tooltip title="关闭则不验证服务器证书">
+            <Form.Item label="验证证书" {...formItemLayout} style={{ marginBottom: 0 }}>
+              <Switch
+                size="small"
+                checked={config.sslValidateServerCert}
+                onChange={(v) => onConfigChange({ sslValidateServerCert: v })}
+                disabled={connected || connecting}
+              />
+            </Form.Item>
+          </Tooltip>
+        )}
       </Space>
 
       <Space size={4}>

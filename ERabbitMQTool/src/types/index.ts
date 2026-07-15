@@ -6,6 +6,8 @@ export interface ConnectionConfig {
   vhost: string
   username: string
   password: string
+  sslEnabled: boolean
+  sslValidateServerCert: boolean
 }
 
 export interface ServerInfo {
