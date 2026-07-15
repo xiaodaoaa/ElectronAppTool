@@ -64,9 +64,7 @@ function setupIPC() {
 
       const connectOptions = {}
       if (config.sslEnabled) {
-        connectOptions.tls = {
-          rejectUnauthorized: config.sslValidateServerCert !== false,
-        }
+        connectOptions.rejectUnauthorized = config.sslValidateServerCert !== false
       }
 
       connection = await amqplib.connect(url, connectOptions)
