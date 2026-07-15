@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Input, Button, Tag, Typography, Radio } from 'antd'
 import type { ReceivedMessage } from '../types'
 
@@ -31,6 +31,15 @@ const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscr
   const handleBindingKeyChange = useCallback((value: string) => {
     onBindingKeyChange?.(value)
   }, [onBindingKeyChange])
+
+  // 连接断开时主进程 cleanUp 已取消所有订阅，前端需同步重置本地订阅状态，
+  // 否则 UI 仍停留在"已订阅"、输入框禁用，与主进程状态不一致
+  useEffect(() => {
+    if (!connected) {
+      setConsumerTag(null)
+      setSubscribing(false)
+    }
+  }, [connected])
 
   const handleSubscribe = useCallback(async () => {
     if (!target.trim()) return
