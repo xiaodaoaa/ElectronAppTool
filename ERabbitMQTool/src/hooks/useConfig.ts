@@ -42,6 +42,8 @@ export function useConfig() {
           vhost: c.vhost ?? prev.vhost,
           username: c.username ?? prev.username,
           password: c.password ?? prev.password,
+          sslEnabled: c.sslEnabled ?? prev.sslEnabled,
+          sslValidateServerCert: c.sslValidateServerCert ?? prev.sslValidateServerCert,
         }))
         if (c.producer) setProducer(c.producer)
         if (c.consumerQueue) setConsumerQueue(c.consumerQueue)
