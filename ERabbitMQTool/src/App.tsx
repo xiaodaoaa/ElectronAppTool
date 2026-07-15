@@ -21,6 +21,10 @@ const App: React.FC = () => {
     setLogs((prev) => [...prev, entry])
   }, [])
 
+  const clearLogs = useCallback(() => {
+    setLogs([])
+  }, [])
+
   const onConnected = useCallback((info: ServerInfo) => {
     setConnected(true)
     setConnecting(false)
@@ -116,7 +120,7 @@ const App: React.FC = () => {
               </div>
             </div>
             <div className="tab-right">
-              <LogPanel logs={logs} />
+              <LogPanel logs={logs} onClear={clearLogs} />
             </div>
           </div>
         </div>
