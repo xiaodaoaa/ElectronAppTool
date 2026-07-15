@@ -70,7 +70,7 @@ export interface ElectronAPI {
   connect: (config: ConnectionConfig) => Promise<{ success: boolean; serverInfo?: ServerInfo }>
   disconnect: () => Promise<{ success: boolean }>
   publish: (target: PublishTarget) => Promise<{ success: boolean }>
-  subscribe: (queue: string) => Promise<{ success: boolean; consumerTag?: string }>
+  subscribe: (params: { mode: 'queue' | 'exchange'; target: string }) => Promise<{ success: boolean; consumerTag?: string }>
   unsubscribe: (consumerTag: string) => Promise<{ success: boolean }>
   saveConfig: (config: ConnectionConfig & { producer?: Record<string, unknown>; consumerQueue?: string }) => Promise<{ success: boolean }>
   loadConfig: () => Promise<{ success: boolean; config?: Record<string, unknown> | null }>

@@ -63,9 +63,9 @@ export function useRabbitMQ(callbacks: UseRabbitMQCallbacks) {
     return api.publish(target)
   }, [])
 
-  const subscribe = useCallback(async (queue: string) => {
+  const subscribe = useCallback(async (params: { mode: 'queue' | 'exchange'; target: string }) => {
     const api = (window as any).electronAPI
-    return api.subscribe(queue)
+    return api.subscribe(params)
   }, [])
 
   const unsubscribe = useCallback(async (consumerTag: string) => {

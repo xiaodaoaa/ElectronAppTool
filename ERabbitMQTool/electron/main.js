@@ -153,18 +153,32 @@ function setupIPC() {
     }
   })
 
-  ipcMain.handle('subscribe', async (_event, queue) => {
+  ipcMain.handle('subscribe', async (_event, params) => {
     if (!channel) return { success: false }
-    if (!queue || !queue.trim()) return { success: false }
+
+    const mode = typeof params === 'string' ? 'queue' : params.mode
+    const target = typeof params === 'string' ? params : params.target
+    if (!target || !target.trim()) return { success: false }
 
     try {
-      const qInfo = await channel.checkQueue(queue)
-      if (qInfo.consumerCount > 0) {
-        sendToRenderer('log-event', { type: 'error', detail: `队列 ${queue} 上已有 ${qInfo.consumerCount} 个消费者，消息将 round-robin 分配，可能丢失。建议停止其他消费者后重试。` })
+      let consumeQueue = target
+      let displayLabel = target
+
+      if (mode === 'exchange') {
+        const tmp = await channel.assertQueue('', { exclusive: true })
+        consumeQueue = tmp.queue
+        await channel.bindQueue(consumeQueue, target, '')
+        displayLabel = `exchange ${target}`
+        sendToRenderer('log-event', { type: 'subscribe', detail: `已创建临时队列 ${consumeQueue} 并绑定到 ${displayLabel}` })
+      } else {
+        const qInfo = await channel.checkQueue(target)
+        if (qInfo.consumerCount > 0) {
+          sendToRenderer('log-event', { type: 'error', detail: `队列 ${target} 上已有 ${qInfo.consumerCount} 个消费者，消息将 round-robin 分配，可能丢失。建议停止其他消费者后重试。` })
+        }
       }
 
       for (const [existingTag, existingQueue] of consumerTags) {
-        if (existingQueue === queue) {
+        if (existingQueue === target) {
           try {
             await channel.cancel(existingTag)
           } catch (_) {}
@@ -172,10 +186,10 @@ function setupIPC() {
         }
       }
 
-      const consumeResult = await channel.consume(queue, (msg) => {
+      const consumeResult = await channel.consume(consumeQueue, (msg) => {
         if (!msg) return
         const received = {
-          queue,
+          queue: target,
           message: msg.content.toString('utf-8'),
           properties: {
             contentType: msg.properties.contentType,
@@ -190,11 +204,11 @@ function setupIPC() {
         }
         sendToRenderer('message-received', received)
         const summary = received.message.length > 50 ? received.message.slice(0, 50) + '...' : received.message
-        sendToRenderer('log-event', { type: 'receive', detail: `[←queue ${queue}] ${summary}` })
+        sendToRenderer('log-event', { type: 'receive', detail: `[←${displayLabel}] ${summary}` })
       }, { noAck: true })
 
-      consumerTags.set(consumeResult.consumerTag, queue)
-      sendToRenderer('log-event', { type: 'subscribe', detail: `queue=${queue} consumerTag=${consumeResult.consumerTag}` })
+      consumerTags.set(consumeResult.consumerTag, target)
+      sendToRenderer('log-event', { type: 'subscribe', detail: `${displayLabel} consumerTag=${consumeResult.consumerTag}` })
 
       return { success: true, consumerTag: consumeResult.consumerTag }
     } catch (err) {

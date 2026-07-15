@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   connect: (config) => ipcRenderer.invoke('connect', config),
   disconnect: () => ipcRenderer.invoke('disconnect'),
   publish: (target) => ipcRenderer.invoke('publish', target),
-  subscribe: (queue) => ipcRenderer.invoke('subscribe', queue),
+  subscribe: (params) => ipcRenderer.invoke('subscribe', params),
   unsubscribe: (consumerTag) => ipcRenderer.invoke('unsubscribe', consumerTag),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
   loadConfig: () => ipcRenderer.invoke('load-config'),
