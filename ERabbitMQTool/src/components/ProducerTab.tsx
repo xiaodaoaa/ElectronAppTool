@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Radio, Input, Button, Switch, Select, Space, Divider, Typography } from 'antd'
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
 import type { PublishTarget, MessageProperties, ProducerState } from '../types'
@@ -29,9 +29,11 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
   const [properties, setProperties] = useState<MessageProperties>(defaults?.properties ?? defaultProperties)
   const [headers, setHeaders] = useState<{ key: string; value: string }[]>([])
   const [sending, setSending] = useState(false)
+  const initializedRef = useRef(false)
 
   useEffect(() => {
-    if (defaults) {
+    if (defaults && !initializedRef.current) {
+      initializedRef.current = true
       setTargetMode(defaults.targetMode)
       setExchange(defaults.exchange)
       setRoutingKey(defaults.routingKey)
