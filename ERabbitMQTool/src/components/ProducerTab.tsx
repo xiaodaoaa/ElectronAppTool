@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { Radio, Input, Button, Switch, Select, Space, Divider, Typography } from 'antd'
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
 import type { PublishTarget, MessageProperties, ProducerState } from '../types'
@@ -21,30 +21,21 @@ const defaultProperties: MessageProperties = {
 }
 
 const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, defaults, onChange }) => {
-  const [targetMode, setTargetMode] = useState<'exchange' | 'queue'>(defaults?.targetMode ?? 'exchange')
-  const [exchange, setExchange] = useState(defaults?.exchange ?? '')
-  const [routingKey, setRoutingKey] = useState(defaults?.routingKey ?? '')
-  const [queue, setQueue] = useState(defaults?.queue ?? '')
+  // 受控字段：由父组件 useConfig.producer 单一持有，加载的值天然同步，避免本地副本与 initializedRef 守卫导致的回写竞态
+  const targetMode = defaults?.targetMode ?? 'exchange'
+  const exchange = defaults?.exchange ?? ''
+  const routingKey = defaults?.routingKey ?? ''
+  const queue = defaults?.queue ?? ''
+  const properties = defaults?.properties ?? defaultProperties
+
+  // 非持久化字段：消息内容与 headers 仅本地维护
   const [message, setMessage] = useState('')
-  const [properties, setProperties] = useState<MessageProperties>(defaults?.properties ?? defaultProperties)
   const [headers, setHeaders] = useState<{ key: string; value: string }[]>([])
   const [sending, setSending] = useState(false)
-  const initializedRef = useRef(false)
 
-  useEffect(() => {
-    if (defaults && !initializedRef.current) {
-      initializedRef.current = true
-      setTargetMode(defaults.targetMode)
-      setExchange(defaults.exchange)
-      setRoutingKey(defaults.routingKey)
-      setQueue(defaults.queue)
-      setProperties(defaults.properties)
-    }
-  }, [defaults])
-
-  useEffect(() => {
-    onChange?.({ targetMode, exchange, routingKey, queue, properties })
-  }, [targetMode, exchange, routingKey, queue, properties, onChange])
+  const update = useCallback((partial: Partial<ProducerState>) => {
+    onChange?.({ targetMode, exchange, routingKey, queue, properties, ...partial })
+  }, [onChange, targetMode, exchange, routingKey, queue, properties])
 
   const handleSend = useCallback(async (msg?: string) => {
     const content = msg ?? message
@@ -94,7 +85,7 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
         <Text strong>发送目标</Text>
         <Radio.Group
           value={targetMode}
-          onChange={(e) => setTargetMode(e.target.value)}
+          onChange={(e) => update({ targetMode: e.target.value })}
           style={{ marginLeft: 12 }}
         >
           <Radio value="exchange">Exchange</Radio>
@@ -107,13 +98,13 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
           <Input
             placeholder="Exchange 名"
             value={exchange}
-            onChange={(e) => setExchange(e.target.value)}
+            onChange={(e) => update({ exchange: e.target.value })}
             disabled={!connected}
           />
           <Input
             placeholder="Routing Key"
             value={routingKey}
-            onChange={(e) => setRoutingKey(e.target.value)}
+            onChange={(e) => update({ routingKey: e.target.value })}
             disabled={!connected}
           />
         </Space>
@@ -121,7 +112,7 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
         <Input
           placeholder="Queue 名"
           value={queue}
-          onChange={(e) => setQueue(e.target.value)}
+          onChange={(e) => update({ queue: e.target.value })}
           disabled={!connected}
         />
       )}
@@ -136,7 +127,7 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
             <Switch
               size="small"
               checked={properties.persistent}
-              onChange={(v) => setProperties((p) => ({ ...p, persistent: v }))}
+              onChange={(v) => update({ properties: { ...properties, persistent: v } })}
             />
           </Space>
           <Space>
@@ -145,7 +136,7 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
               size="small"
               style={{ width: 140 }}
               value={properties.contentType}
-              onChange={(v) => setProperties((p) => ({ ...p, contentType: v }))}
+              onChange={(v) => update({ properties: { ...properties, contentType: v } })}
               options={[
                 { value: 'text/plain', label: 'text/plain' },
                 { value: 'application/json', label: 'application/json' },
@@ -163,7 +154,7 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
               min={0}
               max={9}
               value={properties.priority}
-              onChange={(e) => setProperties((p) => ({ ...p, priority: Math.min(9, Math.max(0, Number(e.target.value))) }))}
+              onChange={(e) => update({ properties: { ...properties, priority: Math.min(9, Math.max(0, Number(e.target.value))) } })}
             />
           </Space>
           <Space>
@@ -172,7 +163,7 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
               size="small"
               style={{ width: 180 }}
               value={properties.messageId || ''}
-              onChange={(e) => setProperties((p) => ({ ...p, messageId: e.target.value || undefined }))}
+              onChange={(e) => update({ properties: { ...properties, messageId: e.target.value || undefined } })}
             />
           </Space>
           <Space>
@@ -181,7 +172,7 @@ const ProducerTab: React.FC<ProducerTabProps> = ({ connected, onPublish, default
               size="small"
               style={{ width: 180 }}
               value={properties.replyTo || ''}
-              onChange={(e) => setProperties((p) => ({ ...p, replyTo: e.target.value || undefined }))}
+              onChange={(e) => update({ properties: { ...properties, replyTo: e.target.value || undefined } })}
             />
           </Space>
         </Space>

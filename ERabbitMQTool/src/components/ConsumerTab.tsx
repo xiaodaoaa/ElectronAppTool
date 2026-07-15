@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { Input, Button, Tag, Typography, Radio } from 'antd'
 import type { ReceivedMessage } from '../types'
 
@@ -14,21 +14,13 @@ interface ConsumerTabProps {
 }
 
 const ConsumerTab: React.FC<ConsumerTabProps> = ({ connected, messages, onSubscribe, onUnsubscribe, defaultQueue, onQueueChange }) => {
+  // target 受控：由父组件 useConfig.consumerQueue 单一持有，避免本地副本与 initializedRef 守卫导致的加载值丢失
+  const target = defaultQueue ?? ''
   const [mode, setMode] = useState<'queue' | 'exchange'>('queue')
-  const [target, setTarget] = useState(defaultQueue ?? '')
   const [consumerTag, setConsumerTag] = useState<string | null>(null)
   const [subscribing, setSubscribing] = useState(false)
-  const initializedRef = useRef(false)
-
-  useEffect(() => {
-    if (defaultQueue && !initializedRef.current) {
-      initializedRef.current = true
-      setTarget(defaultQueue)
-    }
-  }, [defaultQueue])
 
   const handleTargetChange = useCallback((value: string) => {
-    setTarget(value)
     onQueueChange?.(value)
   }, [onQueueChange])
 
