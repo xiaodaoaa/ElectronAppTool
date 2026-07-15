@@ -132,6 +132,7 @@ function setupIPC() {
         exchange = ''
         routingKey = target.queue || ''
         displayTarget = `queue ${target.queue}`
+        await channel.assertQueue(target.queue, { durable: true })
       }
 
       const buf = Buffer.from(target.message || '', 'utf-8')
@@ -171,9 +172,10 @@ function setupIPC() {
         displayLabel = `exchange ${target}`
         sendToRenderer('log-event', { type: 'subscribe', detail: `已创建临时队列 ${consumeQueue} 并绑定到 ${displayLabel}` })
       } else {
+        await channel.assertQueue(target, { durable: true })
         const qInfo = await channel.checkQueue(target)
         if (qInfo.consumerCount > 0) {
-          sendToRenderer('log-event', { type: 'error', detail: `队列 ${target} 上已有 ${qInfo.consumerCount} 个消费者，消息将 round-robin 分配，可能丢失。建议停止其他消费者后重试。` })
+          sendToRenderer('log-event', { type: 'error', detail: `队列 ${target} 上已有 ${qInfo.consumerCount} 个消费者，消息将 round-robin 分配，可能丢失。建议使用 Exchange 模式订阅。` })
         }
       }
 
