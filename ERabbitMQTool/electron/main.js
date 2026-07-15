@@ -158,6 +158,11 @@ function setupIPC() {
     if (!queue || !queue.trim()) return { success: false }
 
     try {
+      const qInfo = await channel.checkQueue(queue)
+      if (qInfo.consumerCount > 0) {
+        sendToRenderer('log-event', { type: 'error', detail: `队列 ${queue} 上已有 ${qInfo.consumerCount} 个消费者，消息将 round-robin 分配，可能丢失。建议停止其他消费者后重试。` })
+      }
+
       for (const [existingTag, existingQueue] of consumerTags) {
         if (existingQueue === queue) {
           try {
