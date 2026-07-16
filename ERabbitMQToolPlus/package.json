@@ -1,0 +1,61 @@
+{
+    "name": "ERabbitMQToolPlus",
+    "version": "1.0.0",
+    "description": "RabbitMQ 消息发送/消费工具",
+    "main": "./out/main/index.js",
+    "author": "fengchao12",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "dev": "electron-vite dev",
+        "build": "electron-vite build",
+        "preview": "electron-vite preview",
+        "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+        "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+        "typecheck": "npm run typecheck:node && npm run typecheck:web",
+        "pack": "electron-vite build && electron-builder --win"
+    },
+    "dependencies": {
+        "amqplib": "^0.10.5",
+        "dayjs": "^1.11.13",
+        "electron-store": "^11.0.2",
+        "element-plus": "^2.14.3",
+        "pinia": "^4.0.2",
+        "uuid": "^14.0.1"
+    },
+    "build": {
+        "appId": "com.erabbitmq.tool",
+        "productName": "ERabbitMQToolPlus",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "out/**/*"
+        ],
+        "win": {
+            "target": [
+                "nsis"
+            ],
+            "icon": "resources/icon.png"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    },
+    "devDependencies": {
+        "@electron-toolkit/tsconfig": "^2.0.0",
+        "@electron-toolkit/utils": "^4.0.0",
+        "@types/amqplib": "^0.10.7",
+        "@types/node": "^22.10.0",
+        "@types/uuid": "^10.0.0",
+        "@vitejs/plugin-vue": "^6.0.8",
+        "electron": "^43.1.1",
+        "electron-builder": "^25.1.8",
+        "electron-vite": "^5.0.0",
+        "typescript": "^5.7.2",
+        "vite": "^5.4.11",
+        "vue": "^3.5.13",
+        "vue-tsc": "^3.3.7"
+    }
+}
