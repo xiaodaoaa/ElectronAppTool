@@ -89,7 +89,7 @@ class ConnectionManager {
           resolve({ success: false, error: this.humanizeError(new Error(msg)) })
         },
 
-        onWebSocketClose: (evt) => {
+        onWebSocketClose: () => {
           if (this.status === 'error') return
           logger.warn('WebSocket 已关闭')
           this.client = null

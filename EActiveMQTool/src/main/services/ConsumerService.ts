@@ -270,9 +270,12 @@ class ConsumerService {
     if (!connectionManager.isConnected()) {
       return { success: false, error: '未连接' }
     }
+    if (!this.subscription) {
+      return { success: false, error: '无活跃订阅' }
+    }
     const client = connectionManager.getClient()!
     try {
-      client.ack({ 'message-id': messageId })
+      client.ack(messageId, this.subscription.id)
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err?.message || String(err) }
@@ -283,9 +286,12 @@ class ConsumerService {
     if (!connectionManager.isConnected()) {
       return { success: false, error: '未连接' }
     }
+    if (!this.subscription) {
+      return { success: false, error: '无活跃订阅' }
+    }
     const client = connectionManager.getClient()!
     try {
-      client.nack({ 'message-id': messageId })
+      client.nack(messageId, this.subscription.id)
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err?.message || String(err) }
