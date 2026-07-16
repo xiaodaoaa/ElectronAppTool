@@ -13,13 +13,16 @@
       <el-form-item label="密码">
         <el-input v-model="form.password" type="password" show-password style="width: 140px" />
       </el-form-item>
-      <el-form-item label="SSL">
+      <el-form-item label="TCP">
+        <el-switch v-model="form.useTCP" />
+      </el-form-item>
+      <el-form-item v-if="!form.useTCP" label="SSL">
         <el-switch v-model="form.sslEnabled" />
       </el-form-item>
     </el-form>
 
     <el-collapse-transition>
-      <div v-if="form.sslEnabled" class="ssl-config">
+      <div class="ssl-config">
         <el-form :model="form" label-width="120px" size="small" inline>
           <el-form-item label="心跳发送(ms)">
             <el-input-number v-model="form.heartbeatOutgoing" :min="0" :step="1000" controls-position="right" style="width: 140px" />
@@ -69,6 +72,7 @@ const form = reactive<ConnectionConfig>({
   username: 'admin',
   password: 'admin',
   sslEnabled: false,
+  useTCP: false,
   heartbeatOutgoing: 10000,
   heartbeatIncoming: 10000
 })
@@ -79,6 +83,23 @@ watch(
     if (cfg) Object.assign(form, cfg)
   },
   { immediate: true }
+)
+
+watch(
+  () => form.useTCP,
+  (tcp, old) => {
+    if (old === undefined) return
+    if (tcp) {
+      form.sslEnabled = false
+      if (form.port === 61614 || form.port === 61617) {
+        form.port = 61613
+      }
+    } else {
+      if (form.port === 61613) {
+        form.port = 61614
+      }
+    }
+  }
 )
 
 watch(

@@ -4,6 +4,7 @@ export interface ConnectionConfig {
   username: string
   password: string
   sslEnabled: boolean
+  useTCP: boolean
   heartbeatOutgoing: number
   heartbeatIncoming: number
 }

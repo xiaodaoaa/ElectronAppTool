@@ -1,6 +1,7 @@
 import { Client, StompConfig } from '@stomp/stompjs'
 import type { ConnectionConfig, ConnectionStatus, ConnectionStatusInfo } from '../../shared/types'
 import { logger } from '../utils/logger'
+import { createTCPSocket } from '../utils/tcp-socket'
 
 type StatusListener = (info: ConnectionStatusInfo) => void
 
@@ -12,7 +13,7 @@ class ConnectionManager {
 
   private buildStatusInfo(): ConnectionStatusInfo {
     if (this.status === 'connected' && this.currentConfig) {
-      const proto = this.currentConfig.sslEnabled ? 'wss' : 'ws'
+      const proto = this.currentConfig.useTCP ? 'tcp' : (this.currentConfig.sslEnabled ? 'wss' : 'ws')
       const display = `${proto}://${this.currentConfig.username}@${this.currentConfig.host}:${this.currentConfig.port}`
       return {
         status: this.status,
@@ -45,6 +46,30 @@ class ConnectionManager {
     this.listeners.delete(cb)
   }
 
+  private buildStompConfig(config: ConnectionConfig): StompConfig {
+    const baseConfig: StompConfig = {
+      connectHeaders: {
+        login: config.username,
+        passcode: config.password
+      },
+      heartbeatOutgoing: config.heartbeatOutgoing || 10000,
+      heartbeatIncoming: config.heartbeatIncoming || 10000,
+      reconnectDelay: 0,
+      debug: (msg: string) => {
+        logger.info('[STOMP] ' + msg)
+      }
+    }
+
+    if (config.useTCP) {
+      baseConfig.webSocketFactory = () => createTCPSocket(config.host, config.port)
+    } else {
+      const proto = config.sslEnabled ? 'wss' : 'ws'
+      baseConfig.brokerURL = `${proto}://${config.host}:${config.port}/ws`
+    }
+
+    return baseConfig
+  }
+
   async connect(config: ConnectionConfig): Promise<{ success: boolean; error?: string }> {
     if (this.client) {
       await this.disconnect()
@@ -53,48 +78,33 @@ class ConnectionManager {
     this.setStatus('connecting')
 
     return new Promise((resolve) => {
-      const proto = config.sslEnabled ? 'wss' : 'ws'
-      const brokerURL = `${proto}://${config.host}:${config.port}/ws`
+      const stompConfig = this.buildStompConfig(config)
 
-      const stompConfig: StompConfig = {
-        brokerURL,
-        connectHeaders: {
-          login: config.username,
-          passcode: config.password
-        },
-        heartbeatOutgoing: config.heartbeatOutgoing || 10000,
-        heartbeatIncoming: config.heartbeatIncoming || 10000,
-        reconnectDelay: 0,
-        debug: (msg: string) => {
-          logger.info('[STOMP] ' + msg)
-        },
+      stompConfig.onConnect = () => {
+        this.setStatus('connected')
+        logger.info(`已连接 ${config.host}:${config.port}`)
+        resolve({ success: true })
+      }
 
-        onConnect: () => {
-          this.setStatus('connected')
-          logger.info(`已连接 ${config.host}:${config.port}`)
-          resolve({ success: true })
-        },
+      stompConfig.onDisconnect = () => {
+        logger.warn('连接已关闭')
+        this.client = null
+        this.setStatus('disconnected')
+      }
 
-        onDisconnect: () => {
-          logger.warn('连接已关闭')
-          this.client = null
-          this.setStatus('disconnected')
-        },
+      stompConfig.onStompError = (frame) => {
+        const msg = frame.headers['message'] || 'STOMP 错误'
+        logger.error('STOMP 错误：' + msg)
+        this.client = null
+        this.setStatus('error')
+        resolve({ success: false, error: this.humanizeError(new Error(msg)) })
+      }
 
-        onStompError: (frame) => {
-          const msg = frame.headers['message'] || 'STOMP 错误'
-          logger.error('STOMP 错误：' + msg)
-          this.client = null
-          this.setStatus('error')
-          resolve({ success: false, error: this.humanizeError(new Error(msg)) })
-        },
-
-        onWebSocketClose: () => {
-          if (this.status === 'error') return
-          logger.warn('WebSocket 已关闭')
-          this.client = null
-          this.setStatus('disconnected')
-        }
+      stompConfig.onWebSocketClose = () => {
+        if (this.status === 'error') return
+        logger.warn('连接已关闭')
+        this.client = null
+        this.setStatus('disconnected')
       }
 
       this.client = new Client(stompConfig)
@@ -104,18 +114,10 @@ class ConnectionManager {
 
   async test(config: ConnectionConfig): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
-      const proto = config.sslEnabled ? 'wss' : 'ws'
-      const brokerURL = `${proto}://${config.host}:${config.port}/ws`
+      const stompConfig = this.buildStompConfig(config)
 
       const testClient = new Client({
-        brokerURL,
-        connectHeaders: {
-          login: config.username,
-          passcode: config.password
-        },
-        heartbeatOutgoing: config.heartbeatOutgoing || 10000,
-        heartbeatIncoming: config.heartbeatIncoming || 10000,
-        reconnectDelay: 0,
+        ...stompConfig,
 
         onConnect: () => {
           testClient.deactivate()
@@ -131,7 +133,7 @@ class ConnectionManager {
         },
 
         onWebSocketClose: () => {
-          resolve({ success: false, error: 'WebSocket 连接关闭' })
+          resolve({ success: false, error: '连接关闭' })
         }
       })
 
