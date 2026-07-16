@@ -4,8 +4,11 @@ import { logger } from '../utils/logger'
 import dayjs from 'dayjs'
 import type { ConsumerConfig, ConsumedMessage, IpcResult } from '../../shared/types'
 
-type MessageListener = (msg: ConsumedMessage) => void
+type MessageListener = (msgs: ConsumedMessage[]) => void
 type StopListener = () => void
+
+const BATCH_INTERVAL_MS = 100
+const BATCH_MAX_SIZE = 200
 
 class ConsumerService {
   private channel: amqp.Channel | null = null
@@ -18,6 +21,8 @@ class ConsumerService {
   private messageListeners: Set<MessageListener> = new Set()
   private stopListeners: Set<StopListener> = new Set()
   private paused = false
+  private batchBuffer: ConsumedMessage[] = []
+  private batchTimer: ReturnType<typeof setInterval> | null = null
 
   onMessage(cb: MessageListener): void {
     this.messageListeners.add(cb)
@@ -35,12 +40,32 @@ class ConsumerService {
     this.stopListeners.delete(cb)
   }
 
-  private emitMessage(msg: ConsumedMessage): void {
-    this.messageListeners.forEach((cb) => cb(msg))
+  private emitMessage(msgs: ConsumedMessage[]): void {
+    this.messageListeners.forEach((cb) => cb(msgs))
   }
 
   private emitStop(): void {
     this.stopListeners.forEach((cb) => cb())
+  }
+
+  private startBatchTimer(): void {
+    if (this.batchTimer) return
+    this.batchTimer = setInterval(() => {
+      this.flushBatch()
+    }, BATCH_INTERVAL_MS)
+  }
+
+  private stopBatchTimer(): void {
+    if (this.batchTimer) {
+      clearInterval(this.batchTimer)
+      this.batchTimer = null
+    }
+  }
+
+  private flushBatch(): void {
+    if (this.batchBuffer.length === 0) return
+    const batch = this.batchBuffer.splice(0, this.batchBuffer.length)
+    this.emitMessage(batch)
   }
 
   async start(config: ConsumerConfig): Promise<IpcResult> {
@@ -70,6 +95,8 @@ class ConsumerService {
       this.receivedCount = 0
       this.paused = false
       this.pendingMessages.clear()
+      this.batchBuffer = []
+      this.startBatchTimer()
 
       let queueName = config.queue
       if (config.autoDeclareQueue) {
@@ -148,7 +175,10 @@ class ConsumerService {
 
     const consumed = this.buildConsumedMessage(msg)
 
-    this.emitMessage(consumed)
+    this.batchBuffer.push(consumed)
+    if (this.batchBuffer.length >= BATCH_MAX_SIZE) {
+      this.flushBatch()
+    }
     logger.info(`收到消息 #${consumed.seq}：${routingKey}，内容：${consumed.content.slice(0, 100)}`)
 
     if (config.maxReceive > 0 && this.receivedCount >= config.maxReceive) {
@@ -264,6 +294,8 @@ class ConsumerService {
   }
 
   async stop(): Promise<IpcResult> {
+    this.stopBatchTimer()
+    this.flushBatch()
     await this.cleanupChannel()
     this.pendingMessages.clear()
     this.paused = false
@@ -272,6 +304,8 @@ class ConsumerService {
   }
 
   private async cleanupChannel(): Promise<void> {
+    this.stopBatchTimer()
+    this.flushBatch()
     if (this.consumerTag && this.channel) {
       try {
         await this.channel.cancel(this.consumerTag)
@@ -304,7 +338,7 @@ class ConsumerService {
       results.push(this.buildConsumedMessage(msg))
     }
     if (results.length > 0) {
-      results.forEach((m) => this.emitMessage(m))
+      this.emitMessage(results)
       logger.info(`拉取 ${results.length} 条消息`)
     }
     if (this.config.maxReceive > 0 && this.receivedCount >= this.config.maxReceive) {

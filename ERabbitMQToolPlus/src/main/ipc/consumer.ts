@@ -6,8 +6,8 @@ import type { ConsumedMessage } from '../../shared/types'
 export function registerConsumerIpc(
   mainWindow: { webContents: { send: (ch: string, ...args: any[]) => void } }
 ): void {
-  consumerService.onMessage((msg: ConsumedMessage) => {
-    mainWindow.webContents.send('consumer:message', msg)
+  consumerService.onMessage((msgs: ConsumedMessage[]) => {
+    mainWindow.webContents.send('consumer:message', msgs)
   })
 
   consumerService.onStop(() => {

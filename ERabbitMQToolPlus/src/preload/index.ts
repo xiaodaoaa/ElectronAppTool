@@ -44,8 +44,8 @@ export const api = {
       ipcRenderer.invoke('consumer:ack', deliveryTag),
     nack: (deliveryTag: number, requeue: boolean): Promise<IpcResult> =>
       ipcRenderer.invoke('consumer:nack', deliveryTag, requeue),
-    onMessage: (cb: (msg: ConsumedMessage) => void): void => {
-      const handler = (_: unknown, msg: ConsumedMessage) => cb(msg)
+    onMessage: (cb: (msgs: ConsumedMessage[]) => void): void => {
+      const handler = (_: unknown, msgs: ConsumedMessage[]) => cb(msgs)
       ipcRenderer.on('consumer:message', handler)
     },
     onStop: (cb: () => void): void => {

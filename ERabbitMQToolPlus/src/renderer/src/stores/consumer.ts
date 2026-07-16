@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import type { ConsumedMessage, ConsumerConfig, IpcResult } from '../../../shared/types'
 
 export const useConsumerStore = defineStore('consumer', () => {
-  const messages = ref<ConsumedMessage[]>([])
+  const messages = shallowRef<ConsumedMessage[]>([])
   const running = ref(false)
   const paused = ref(false)
   const maxCache = ref(1000)
@@ -61,14 +61,38 @@ export const useConsumerStore = defineStore('consumer', () => {
     return r
   }
 
+  let rafId: number | null = null
+  let pendingBatch: ConsumedMessage[] = []
+
+  function flushPending() {
+    if (pendingBatch.length === 0) return
+    const frozen = pendingBatch.map((m) => Object.freeze(m))
+    pendingBatch = []
+    const current = messages.value
+    const merged = current.concat(frozen)
+    if (merged.length > maxCache.value) {
+      messages.value = merged.slice(merged.length - maxCache.value)
+    } else {
+      messages.value = merged
+    }
+  }
+
   function bindIpc() {
-    window.api.consumer.onMessage((msg) => {
-      messages.value.push(msg)
-      if (messages.value.length > maxCache.value) {
-        messages.value = messages.value.slice(messages.value.length - maxCache.value)
+    window.api.consumer.onMessage((msgs) => {
+      pendingBatch = pendingBatch.concat(msgs)
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null
+          flushPending()
+        })
       }
     })
     window.api.consumer.onStop(() => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      flushPending()
       running.value = false
       paused.value = false
     })
