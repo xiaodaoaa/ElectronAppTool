@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Layout
 
-This is a **monorepo of five independent Electron desktop tools** for network debugging. There is **no root `package.json`** — each subdirectory is a self-contained app with its own `package.json`, dependencies, and `node_modules`. Always `cd` into the relevant subproject before running any command.
+This is a **monorepo of six independent Electron desktop tools** for network debugging. There is **no root `package.json`** — each subdirectory is a self-contained app with its own `package.json`, dependencies, and `node_modules`. Always `cd` into the relevant subproject before running any command.
 
 | Subproject | Stack | Win7 Compat | Build Approach | Purpose |
 |------------|-------|-------------|----------------|---------|
@@ -13,6 +13,7 @@ This is a **monorepo of five independent Electron desktop tools** for network de
 | `EWebsocketMan/` | Electron 22 + Vue 3 (Composition API) + Vite 5 | ✅ | `vite-plugin-electron` builds `src/main/` + `src/preload/` | WebSocketMan v1.0.9 replica — WS server/client modes |
 | `ERabbitMQTool/` | Electron 22 + React 18 + TS + Ant Design 5 + Vite 6 + `amqplib` | ✅ | Standalone `electron/` dir | RabbitMQ debugging: connection management, producer publish, consumer subscribe (queue/exchange modes), SSL support |
 | `ERabbitMQToolPlus/` | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `amqplib` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | RabbitMQ debugging enhanced: singleton services, encrypted config persistence, two-stage typecheck |
+| `EActiveMQTool/` | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `@stomp/stompjs` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | ActiveMQ debugging: STOMP over TCP/WebSocket, producer/consumer, JMS selector, TCP socket adapter |
 
 ## Commands (run inside a subproject)
 
@@ -38,7 +39,7 @@ npm run preview      # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbi
 # Package Windows NSIS installer → release/
 npm run pack         # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool / ERabbitMQToolPlus
 
-# Typecheck (ERabbitMQToolPlus only)
+# Typecheck (ERabbitMQToolPlus / EActiveMQTool)
 npm run typecheck    # tsc(node) + vue-tsc(web) — MUST run after editing
 ```
 
@@ -46,13 +47,14 @@ npm run typecheck    # tsc(node) + vue-tsc(web) — MUST run after editing
 
 **EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool** use `concurrently` + `wait-on`: Vite starts first (port 5173, `strictPort: true`), then Electron launches only after `http://localhost:5173` is reachable. The main process receives `VITE_DEV_SERVER_URL` env var and loads the dev server — otherwise it loads the built `dist/index.html`.
 
-**ERabbitMQToolPlus** uses `electron-vite dev` which handles all three processes (main/preload/renderer) with HMR in one command.
+**ERabbitMQToolPlus** uses `electron-vite dev` which handles all three processes (main/preload/renderer) with HMR in one command. **EActiveMQTool** uses the same approach.
 
 ### pack command variations
 
 - **EWebsocketTool**, **EWebsocketMan** and **ERabbitMQTool** (Win7-compatible): `pack` includes `-c.electronDist="node_modules/electron/dist" -c.electronVersion="22.3.27"` to force electron-builder to use the locally-installed Electron 22 binary rather than downloading Electron 33+.
 - **EHttpServerTool** (not Win7): `pack` does NOT need the electronDist override — electron-builder uses whatever Electron version is in `node_modules`.
 - **ERabbitMQToolPlus** (not Win7): `pack` runs `electron-vite build && electron-builder --win` — no electronDist override needed (Electron 43).
+- **EActiveMQTool** (not Win7): same as ERabbitMQToolPlus — `pack` runs `electron-vite build && electron-builder --win`.
 
 ## Architecture (shared across all five apps)
 
@@ -91,7 +93,7 @@ Renderer (src/ — React TSX or Vue 3)
 - `"main": "dist-electron/main.js"` in package.json — Electron loads the built artifact
 - vite-plugin-electron handles the extra build steps; electron-builder includes `dist-electron/**/*`
 
-**Approach C — electron-vite** (ERabbitMQToolPlus):
+**Approach C — electron-vite** (ERabbitMQToolPlus, EActiveMQTool):
 - Main/preload/renderer source lives in `src/main/`, `src/preload/`, `src/renderer/`
 - electron-vite builds ALL THREE: main → `out/main/`, preload → `out/preload/`, renderer → `out/renderer/`
 - `"main": "./out/main/index.js"` in package.json — Electron loads built artifacts
@@ -130,7 +132,7 @@ Three apps (EWebsocketTool, EWebsocketMan, ERabbitMQTool) run on Windows 7 x64 v
 - `pack` script electronDist override
 - Build target may need adjustment (`vite.config.ts` `build.target` for EWebsocketTool and ERabbitMQTool is `chrome108`)
 
-ERabbitMQToolPlus uses Electron 43 and does NOT support Win7.
+ERabbitMQToolPlus uses Electron 43 and does NOT support Win7. EActiveMQTool also uses Electron 43 and does NOT support Win7.
 
 ### IPv4 normalization
 
@@ -174,3 +176,15 @@ Enhanced RabbitMQ debugging tool built on `amqplib` with electron-vite three-pro
 - **Path aliases**: `@shared/*` → `src/shared/*` (all three processes), `@renderer/*` → `src/renderer/src/*` (renderer only)
 - **Renderer**: Vue 3 + Element Plus + Pinia; views (`ProducerView`/`ConsumerView`/`SettingsView`), components (`ConnectionForm`/`LogPanel`/`MessageDetail`/`MessageTable`), stores (connection/producer/consumer/log/settings)
 - **Gotcha**: Electron binary may not be downloaded (`node_modules/electron/dist/electron.exe` missing) — run `node node_modules/electron/install.js` manually
+
+### EActiveMQTool
+
+ActiveMQ debugging tool built on `@stomp/stompjs` with electron-vite three-process architecture. Mirrors ERabbitMQToolPlus design. Key points:
+
+- **STOMP connection**: `ConnectionManager` singleton supports **TCP native** (via `net.Socket` adapter in `src/main/utils/tcp-socket.ts`) and **WebSocket** (ws/wss). TCP adapter wraps `net.Socket` to match `IStompSocket` interface.
+- **Connection form**: has a TCP toggle; when enabled, SSL option is hidden and port defaults to 61613 (STOMP TCP port). When disabled, uses WebSocket with port 61614.
+- **Producer**: `ProducerService` publishes to `/queue/xxx` or `/topic/xxx` destinations; supports `persistent`, `priority`, `expires` STOMP headers; batch sending with progress
+- **Consumer**: `ConsumerService` subscribes with auto/client/client-individual ACK modes; supports JMS `selector` header; `prefetchCount` for client-individual mode; message filtering (routingKey wildcard + header key-value match)
+- **ACK via `messageId`**: `client.ack(messageId, subscriptionId)` requires two args — `messageId` (string) and `subscriptionId` (from `StompSubscription.id`). NOT `deliveryTag` like RabbitMQ.
+- **Config persistence**: `electron-store` with AES-256-CBC encrypted passwords; same pattern as ERabbitMQToolPlus
+- **Renderer**: Vue 3 + Element Plus + Pinia; same component structure as ERabbitMQToolPlus (ConnectionForm/LogPanel/MessageTable/MessageDetail, ProducerView/ConsumerView/SettingsView)
