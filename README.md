@@ -1,6 +1,6 @@
 # ElectronAppTool
 
-Electron 桌面工具集合，五个独立子项目组成的 monorepo。
+Electron 桌面工具集合，六个独立子项目组成的 monorepo。
 
 > **注意**：这是 monorepo，**没有根目录 `package.json`**。每个子项目有独立的依赖、`node_modules` 和运行脚本。请先 `cd` 到对应目录再执行命令。
 
@@ -15,6 +15,7 @@ Electron 桌面工具集合，五个独立子项目组成的 monorepo。
 | [EWebsocketMan](./EWebsocketMan/) | Electron 22 + Vue 3 (Composition API) + Vite 5 + `ws` | ✅ | 复刻 WebSocketMan v1.0.9 — WS 服务端/客户端双模式 |
 | [ERabbitMQTool](./ERabbitMQTool/) | Electron 22 + React 18 + TS + Ant Design 5 + Vite 6 + `amqplib` | ✅ | RabbitMQ 调试工具 — 连接管理、生产者发布、消费者订阅（队列/交换机模式）、SSL 支持 |
 | [ERabbitMQToolPlus](./ERabbitMQToolPlus/) | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `amqplib` | ❌ | RabbitMQ 调试工具增强版 — 三进程架构、连接/生产者/消费者单例服务、配置加密持久化 |
+| [EActiveMQTool](./EActiveMQTool/) | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `@stomp/stompjs` | ❌ | ActiveMQ 调试工具 — STOMP over TCP/WebSocket 双模式、连接管理、生产者发布、消费者订阅、JMS selector 支持 |
 
 ---
 
@@ -73,6 +74,17 @@ npm run preview      # 预览 out/ 构建产物
 npm run pack         # electron-vite build + electron-builder --win → release/ NSIS 安装包
 ```
 
+### EActiveMQTool
+
+```bash
+cd EActiveMQTool
+npm install
+npm run dev          # electron-vite 三进程热更新（main/preload/renderer）
+npm run typecheck    # tsc(node) + vue-tsc(web) 两段类型检查
+npm run build        # electron-vite 构建产物 → out/
+npm run pack         # electron-vite build + electron-builder --win → release/ NSIS 安装包
+```
+
 > 如遇 `Electron uninstall` 错误或 `node_modules/electron/dist/electron.exe` 缺失，手动跑 `node node_modules/electron/install.js` 下载二进制。
 
 ---
@@ -85,7 +97,7 @@ npm run pack         # electron-vite build + electron-builder --win → release/
 | `npm run build` | 全部 | Vite 构建输出到 `dist/` |
 | `npm run preview` | 全部 | 预览 Vite 构建产物 |
 | `npm run pack` | 全部 | Vite 构建 → electron-builder 打包 Windows NSIS 安装包 |
-| `npm run typecheck` | ERabbitMQToolPlus | tsc + vue-tsc 两段类型检查 |
+| `npm run typecheck` | ERabbitMQToolPlus / EActiveMQTool | tsc + vue-tsc 两段类型检查 |
 
 ### dev 机制
 
@@ -132,7 +144,7 @@ Renderer (React TSX / Vue 3)
 - `package.json` 的 `"main": "dist-electron/main.js"` — Electron 加载构建产物
 - electron-builder 的 `files` 配置包含 `dist-electron/**/*`
 
-**方式 C — electron-vite**（ERabbitMQToolPlus）：
+**方式 C — electron-vite**（ERabbitMQToolPlus、EActiveMQTool）：
 - 主进程/预加载/渲染源码分别位于 `src/main/`、`src/preload/`、`src/renderer/`
 - electron-vite 统一构建三进程：main → `out/main/`，preload → `out/preload/`，renderer → `out/renderer/`
 - `package.json` 的 `"main": "./out/main/index.js"` — Electron 加载构建产物
@@ -235,6 +247,18 @@ electron/
 - **类型安全**：`src/shared/types.ts` 跨进程共享类型，`npm run typecheck` 做 tsc + vue-tsc 两段检查
 
 **结构**：采用方式 C（electron-vite），主进程业务逻辑拆分到 `src/main/services/`（三个单例服务），`src/main/ipc/` 只做参数转发，`src/main/utils/` 是工具（ssl/store/logger）。渲染进程 Vue 3 + Element Plus + Pinia，`stores/` 调 `window.api`，`views/` 管页面状态，`components/` 是复用组件。
+
+### EActiveMQTool — ActiveMQ 调试工具
+
+基于 `@stomp/stompjs` 的 ActiveMQ 消息队列调试工具，使用 electron-vite 三进程架构，参照 ERabbitMQToolPlus 设计：
+
+- **连接管理**：`ConnectionManager` 单例管理 STOMP 连接，支持 **TCP 原生连接**（通过 `net.Socket` 适配器）和 **WebSocket 连接**（ws/wss），SSL 可选，断开时自动清理消费者订阅
+- **生产者**：`ProducerService` 单例，支持向 Queue（`/queue/xxx`）和 Topic（`/topic/xxx`）发送消息，支持 persistent/priority/expires 等 STOMP 头、批量发送
+- **消费者**：`ConsumerService` 单例，支持 auto/client/client-individual 三种 ACK 模式、JMS selector 消息选择器、prefetch 预取控制、消息过滤（routingKey 通配符 + header 键值匹配）
+- **配置持久化**：`electron-store` 保存连接/生产者/消费者配置，密码用 AES-256-CBC 加密
+- **日志面板**：实时显示连接/发送/接收/错误事件
+
+**结构**：采用方式 C（electron-vite），主进程业务逻辑拆分到 `src/main/services/`（ConnectionManager/ProducerService/ConsumerService），`src/main/ipc/` 只做参数转发，`src/main/utils/` 包含 TCP socket 适配器（`tcp-socket.ts`）、store、logger。渲染进程 Vue 3 + Element Plus + Pinia。
 
 ---
 
