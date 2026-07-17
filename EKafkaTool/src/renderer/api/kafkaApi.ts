@@ -35,6 +35,7 @@ interface KafkaApi {
   onRebalance(cb: (e: RebalanceEvent) => void): () => void
   onProduceAck(cb: (result: ProduceResult) => void): () => void
   onScenarioStep(cb: (data: { runId: string; stepIndex: number; message: string }) => void): () => void
+  themeSet(theme: 'light' | 'dark'): Promise<void>
 }
 
 declare global {

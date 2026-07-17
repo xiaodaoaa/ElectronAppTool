@@ -34,4 +34,6 @@ export const IPC_CHANNELS = {
   EVENT_REBALANCE: 'event:rebalance',
   EVENT_PRODUCE_ACK: 'event:produceAck',
   EVENT_SCENARIO_STEP: 'event:scenarioStep',
+
+  THEME_SET: 'theme:set',
 } as const

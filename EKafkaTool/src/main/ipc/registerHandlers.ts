@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, nativeTheme } from 'electron'
 import { IPC_CHANNELS } from './channels'
 import { kafkaClientManager } from '../kafka/KafkaClientManager'
 import { ProducerService } from '../kafka/ProducerService'
@@ -229,6 +229,11 @@ export function registerAllHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.SCENARIO_STOP, wrapHandler(async (_event, runId: string) => {
     demoScenarioService.stop(runId)
+  }))
+
+  ipcMain.handle(IPC_CHANNELS.THEME_SET, wrapHandler(async (_event, theme: 'light' | 'dark') => {
+    nativeTheme.themeSource = theme
+    logger.info(`主题已切换: ${theme}`)
   }))
 
   logger.info('IPC Handlers 已注册')

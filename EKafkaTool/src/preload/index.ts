@@ -158,6 +158,9 @@ const api = {
       ipcRenderer.removeListener(IPC_CHANNELS.EVENT_SCENARIO_STEP, handler)
     }
   },
+
+  themeSet: (theme: 'light' | 'dark'): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_SET, theme),
 }
 
 console.log('[preload] 准备暴露 kafkaApi')

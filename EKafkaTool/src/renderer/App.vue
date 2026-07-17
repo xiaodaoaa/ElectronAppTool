@@ -79,11 +79,14 @@ import { Link, DataBoard, Upload, Download, PieChart, VideoPlay, Setting } from 
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useConsumerStore } from '@/stores/consumerStore'
 import { useProducerStore } from '@/stores/producerStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 const route = useRoute()
 const connectionStore = useConnectionStore()
 const consumerStore = useConsumerStore()
 const producerStore = useProducerStore()
+// 触发 settingsStore 初始化，确保启动时应用已保存的主题
+useSettingsStore()
 
 const selectedConnId = computed({
   get: () => connectionStore.activeId,
@@ -142,6 +145,9 @@ html, body, #app {
   margin: 0;
   padding: 0;
   height: 100%;
+}
+html.dark {
+  color-scheme: dark;
 }
 #app-root {
   height: 100vh;
