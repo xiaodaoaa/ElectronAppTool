@@ -1,0 +1,65 @@
+{
+  "name": "kafka-teach",
+  "version": "1.0.0",
+  "description": "Kafka 教学演示工具",
+  "main": "./out/main/index.mjs",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package:win": "electron-vite build && electron-builder --win",
+    "package:mac": "electron-vite build && electron-builder --mac",
+    "package:linux": "electron-vite build && electron-builder --linux",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint . --ext .ts,.vue"
+  },
+  "dependencies": {
+    "@vue/devtools-api": "^8.1.5",
+    "electron-log": "^5.1.7",
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
+    "element-plus": "^2.8.0",
+    "pinia": "^2.2.0",
+    "typescript": "^5.6.0",
+    "vite": "^8.1.5",
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0",
+    "vue-tsc": "^2.1.0"
+  },
+  "build": {
+    "appId": "com.kafka.teach",
+    "productName": "KafkaTeach",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": ["zh_CN", "en_US"]
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "resources/icon.png",
+      "category": "Development"
+    }
+  }
+}

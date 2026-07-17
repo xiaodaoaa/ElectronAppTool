@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Layout
 
-This is a **monorepo of six independent Electron desktop tools** for network debugging. There is **no root `package.json`** — each subdirectory is a self-contained app with its own `package.json`, dependencies, and `node_modules`. Always `cd` into the relevant subproject before running any command.
+This is a **monorepo of seven independent Electron desktop tools** for network debugging. There is **no root `package.json`** — each subdirectory is a self-contained app with its own `package.json`, dependencies, and `node_modules`. Always `cd` into the relevant subproject before running any command.
 
 | Subproject | Stack | Win7 Compat | Build Approach | Purpose |
 |------------|-------|-------------|----------------|---------|
@@ -14,6 +14,7 @@ This is a **monorepo of six independent Electron desktop tools** for network deb
 | `ERabbitMQTool/` | Electron 22 + React 18 + TS + Ant Design 5 + Vite 6 + `amqplib` | ✅ | Standalone `electron/` dir | RabbitMQ debugging: connection management, producer publish, consumer subscribe (queue/exchange modes), SSL support |
 | `ERabbitMQToolPlus/` | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `amqplib` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | RabbitMQ debugging enhanced: singleton services, encrypted config persistence, two-stage typecheck |
 | `EActiveMQTool/` | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `@stomp/stompjs` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | ActiveMQ debugging: STOMP over TCP/WebSocket, producer/consumer, JMS selector, TCP socket adapter |
+| `EKafkaTool/` | Electron 33 + Vue 3 + Element Plus + Pinia + electron-vite + `kafkajs` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | Kafka teaching tool: connection/topic management, producer/consumer, 6 demo scenarios, message replay |
 
 ## Commands (run inside a subproject)
 
@@ -25,29 +26,33 @@ npm install
 npm run dev          # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool
 
 # Development — electron-vite three-process HMR
-npm run dev          # ERabbitMQToolPlus (run inside that dir)
+npm run dev          # ERabbitMQToolPlus / EActiveMQTool / EKafkaTool (run inside that dir)
 
 # Build (Vite → dist/)
 npm run build
 
 # Build (electron-vite → out/)
-npm run build        # ERabbitMQToolPlus
+npm run build        # ERabbitMQToolPlus / EActiveMQTool / EKafkaTool
 
-# Preview Vite build
-npm run preview      # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool only
+# Preview build
+npm run preview      # all apps
 
 # Package Windows NSIS installer → release/
-npm run pack         # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool / ERabbitMQToolPlus
+npm run pack         # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool / ERabbitMQToolPlus / EActiveMQTool
+npm run package:win  # EKafkaTool (different script name)
 
-# Typecheck (ERabbitMQToolPlus / EActiveMQTool)
-npm run typecheck    # tsc(node) + vue-tsc(web) — MUST run after editing
+# Typecheck (ERabbitMQToolPlus / EActiveMQTool / EKafkaTool)
+npm run typecheck    # ERabbitMQToolPlus/EActiveMQTool: tsc(node) + vue-tsc(web) two-stage; EKafkaTool: vue-tsc single-stage — MUST run after editing
+
+# Lint (EKafkaTool only)
+npm run lint         # eslint .ts/.vue
 ```
 
 ### dev script mechanism
 
 **EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool** use `concurrently` + `wait-on`: Vite starts first (port 5173, `strictPort: true`), then Electron launches only after `http://localhost:5173` is reachable. The main process receives `VITE_DEV_SERVER_URL` env var and loads the dev server — otherwise it loads the built `dist/index.html`.
 
-**ERabbitMQToolPlus** uses `electron-vite dev` which handles all three processes (main/preload/renderer) with HMR in one command. **EActiveMQTool** uses the same approach.
+**ERabbitMQToolPlus** uses `electron-vite dev` which handles all three processes (main/preload/renderer) with HMR in one command. **EActiveMQTool** and **EKafkaTool** use the same approach.
 
 ### pack command variations
 
@@ -55,8 +60,9 @@ npm run typecheck    # tsc(node) + vue-tsc(web) — MUST run after editing
 - **EHttpServerTool** (not Win7): `pack` does NOT need the electronDist override — electron-builder uses whatever Electron version is in `node_modules`.
 - **ERabbitMQToolPlus** (not Win7): `pack` runs `electron-vite build && electron-builder --win` — no electronDist override needed (Electron 43).
 - **EActiveMQTool** (not Win7): same as ERabbitMQToolPlus — `pack` runs `electron-vite build && electron-builder --win`.
+- **EKafkaTool** (not Win7): `package:win` runs `electron-vite build && electron-builder --win` — no electronDist override needed (Electron 33). Note the script name is `package:win`, not `pack`.
 
-## Architecture (shared across all five apps)
+## Architecture (shared across all seven apps)
 
 ### Three-process model
 
@@ -65,17 +71,18 @@ All apps follow the same split, regardless of frontend framework (React vs Vue):
 ```
 Main process (electron/main.js or src/main/main.js or src/main/index.ts)
   ├── Owns BrowserWindow
-  ├── Owns all networking (http / ws / WebSocket) — renderer never touches sockets
+  ├── Owns all networking (http / ws / WebSocket / Kafka / STOMP) — renderer never touches sockets
   ├── Registers ipcMain.handle() for request/response
   └── Sends async events to renderer via webContents.send()
 
 Preload (electron/preload.js or src/preload/preload.js or src/preload/index.ts)
-  ├── contextBridge.exposeInMainWorld('electronAPI'/'api', …)
+  ├── contextBridge.exposeInMainWorld('electronAPI'/'api'/'kafkaApi', …)
   ├── contextIsolation: true, nodeIntegration: false
   └── Every event listener returns an unsubscribe function
 
 Renderer (src/ — React TSX or Vue 3)
-  └── Talks to main process EXCLUSIVELY through window.electronAPI (or window.api for ERabbitMQToolPlus)
+  └── Talks to main process EXCLUSIVELY through window.electronAPI (first four apps),
+      window.api (ERabbitMQToolPlus/EActiveMQTool), or window.kafkaApi (EKafkaTool)
       Never imports Node/Electron modules directly
 ```
 
@@ -93,17 +100,17 @@ Renderer (src/ — React TSX or Vue 3)
 - `"main": "dist-electron/main.js"` in package.json — Electron loads the built artifact
 - vite-plugin-electron handles the extra build steps; electron-builder includes `dist-electron/**/*`
 
-**Approach C — electron-vite** (ERabbitMQToolPlus, EActiveMQTool):
+**Approach C — electron-vite** (ERabbitMQToolPlus, EActiveMQTool, EKafkaTool):
 - Main/preload/renderer source lives in `src/main/`, `src/preload/`, `src/renderer/`
 - electron-vite builds ALL THREE: main → `out/main/`, preload → `out/preload/`, renderer → `out/renderer/`
-- `"main": "./out/main/index.js"` in package.json — Electron loads built artifacts
+- `"main": "./out/main/index.js"` in package.json (EKafkaTool uses `./out/main/index.mjs`) — Electron loads built artifacts
 - electron-builder includes `out/**/*` in files config
-- Shared types in `src/shared/`, referenced by all three processes via `@shared/*` alias
-- **sandbox: false** — preload needs to require non-Electron modules (shared/types); not available in sandbox mode
+- Shared types: ERabbitMQToolPlus/EActiveMQTool in `src/shared/`, referenced by all three processes via `@shared/*` alias; EKafkaTool in `src/main/kafka/types.ts`, referenced via relative paths (no `src/shared/` dir)
+- **sandbox: false** — preload needs to require non-Electron modules (shared/types, kafkajs types); not available in sandbox mode
 
 ### IPC pattern
 
-Every app uses the same two flavors, through `window.electronAPI` (first four apps) or `window.api` (ERabbitMQToolPlus):
+Every app uses the same two flavors, through `window.electronAPI` (first four apps), `window.api` (ERabbitMQToolPlus/EActiveMQTool), or `window.kafkaApi` (EKafkaTool):
 
 **Request/response** — `ipcRenderer.invoke(channel, …args)` ↔ `ipcMain.handle(channel, handler)`:
 - Used for actions: start/stop server, add/config, save/load, send message, file operations
@@ -132,7 +139,7 @@ Three apps (EWebsocketTool, EWebsocketMan, ERabbitMQTool) run on Windows 7 x64 v
 - `pack` script electronDist override
 - Build target may need adjustment (`vite.config.ts` `build.target` for EWebsocketTool and ERabbitMQTool is `chrome108`)
 
-ERabbitMQToolPlus uses Electron 43 and does NOT support Win7. EActiveMQTool also uses Electron 43 and does NOT support Win7.
+ERabbitMQToolPlus uses Electron 43 and does NOT support Win7. EActiveMQTool also uses Electron 43 and does NOT support Win7. EKafkaTool uses Electron 33 and does NOT support Win7.
 
 ### IPv4 normalization
 
@@ -143,7 +150,7 @@ All three WS/HTTP apps strip the IPv6-mapped prefix from `remoteAddress`:
 
 ### Config persistence
 
-Configs (server settings, connection URLs) are saved to `app.getPath('userData')` as JSON files. EWebsocketMan auto-saves with 300ms debounce. EHttpServerTool uses a PathConfigManager class. ERabbitMQTool saves connection config (host/port/vhost/credentials/SSL options) to `config.json` in `userData`. ERabbitMQToolPlus uses `electron-store` (`src/main/utils/store.ts`) with AES-256-CBC encrypted passwords; configs saved on successful operations (connect/send/start), renderer pulls via `loadProducer`/`loadConsumer` on mount (not push, due to timing issues).
+Configs (server settings, connection URLs) are saved to `app.getPath('userData')` as JSON files. EWebsocketMan auto-saves with 300ms debounce. EHttpServerTool uses a PathConfigManager class. ERabbitMQTool saves connection config (host/port/vhost/credentials/SSL options) to `config.json` in `userData`. ERabbitMQToolPlus/EActiveMQTool use `electron-store` (`src/main/utils/store.ts`) with AES-256-CBC encrypted passwords; configs saved on successful operations (connect/send/start), renderer pulls via `loadProducer`/`loadConsumer` on mount (not push, due to timing issues). EKafkaTool uses a plain JSON file (`connections.json`) with `safeStorage`-encrypted passwords (base64 fallback when `safeStorage.isEncryptionAvailable()` is false) — **does NOT use electron-store**; connection configs saved on save/delete, renderer pulls via `loadConfigs` on mount.
 
 ## Subproject specifics
 
@@ -188,3 +195,23 @@ ActiveMQ debugging tool built on `@stomp/stompjs` with electron-vite three-proce
 - **ACK via `messageId`**: `client.ack(messageId, subscriptionId)` requires two args — `messageId` (string) and `subscriptionId` (from `StompSubscription.id`). NOT `deliveryTag` like RabbitMQ.
 - **Config persistence**: `electron-store` with AES-256-CBC encrypted passwords; same pattern as ERabbitMQToolPlus
 - **Renderer**: Vue 3 + Element Plus + Pinia; same component structure as ERabbitMQToolPlus (ConnectionForm/LogPanel/MessageTable/MessageDetail, ProducerView/ConsumerView/SettingsView)
+
+### EKafkaTool
+
+Kafka teaching/demonstration tool built on `kafkajs` with electron-vite three-process architecture. Designed for learning Kafka concepts via 6 guided demo scenarios. See `EKafkaTool/AGENTS.md` for detailed agent guidance. Key points:
+
+- **Connection**: `KafkaClientManager` singleton (`src/main/kafka/KafkaClientManager.ts`) manages the `Kafka` + `Admin` instances; supports SASL (plain/scram-sha-256/scram-sha-512) and SSL; `testConnection` spins up a throwaway admin; `setStatusCallback` pushes status changes via `event:connStatus`
+- **Topic admin**: listTopics/topicDetail/createTopic/deleteTopic via the `Admin` instance; topicDetail fetches partition metadata + earliest/latest offsets
+- **Producer**: `ProducerService` (`src/main/kafka/ProducerService.ts`) — single producer lazily connected; `send` for one-shot, `sendBatch` for periodic sends with `AbortController` cancellation; message value template supports `{{seq}}`/`{{ts}}`/`{{rand}}` placeholders; key strategies: fixed/random/round-robin; acks pushed via `event:produceAck`
+- **Consumer**: `ConsumerService` (`src/main/kafka/ConsumerService.ts`) — multi-instance `Map<id, InstanceEntry>`; each instance has its own `MessageBuffer`; supports pause/resume/seek/commit; `GROUP_JOIN` event pushes rebalance info via `event:rebalance`; state changes pushed via `event:consumerState`
+- **MessageBuffer** (`src/main/util/messageBuffer.ts`): batches consumer messages, flushes on `maxSize=100` or `intervalMs=200ms`, pushes via `event:consumerMessage` — avoids per-message IPC overhead
+- **Demo scenarios**: `DemoScenarioService` (`src/main/kafka/DemoScenarioService.ts`) + `src/main/data/scenarios.ts` defines 6 scenarios (S1-S6): first message, partitions & key, consumer group load balancing, rebalance, message replay, ordering & acks; `produce` with `count=0` means continuous send (999999 msgs); progress pushed via `event:scenarioStep`
+- **`window.kafkaApi`** (not `window.api`): preload does `contextBridge.exposeInMainWorld('kafkaApi', api)` + `export type KafkaApi = typeof api`; renderer types are hand-written in `src/renderer/api/kafkaApi.ts` (`KafkaApi` interface + `declare global { interface Window { kafkaApi } }`) — **must be kept in sync manually** with preload
+- **IPC channels**: centralized in `src/main/ipc/channels.ts` (`IPC_CHANNELS` const); `src/main/ipc/registerHandlers.ts` registers all handlers via `wrapHandler` (error logging + rethrow); `pushToRenderer` wrapper null-checks `win && !win.isDestroyed()`
+- **Config persistence**: plain JSON file (`connections.json` in `app.getPath('userData')`) with `safeStorage`-encrypted passwords (base64 fallback) — **NOT electron-store**; saved on save/delete, renderer pulls via `loadConfigs` on mount
+- **Path alias**: `@/*` → `src/renderer/*` (renderer only); main/preload use relative paths; **no `@shared/*` alias** (shared types in `src/main/kafka/types.ts`)
+- **typecheck**: single-stage `vue-tsc --noEmit` (web side only) — differs from ERabbitMQToolPlus/EActiveMQTool's two-stage `tsc + vue-tsc`
+- **package script**: `npm run package:win` (not `pack`) for Windows NSIS installer
+- **`package.json` `main`**: `./out/main/index.mjs` (note `.mjs` extension, because `"type": "module"`); preload path is `../preload/index.mjs`
+- **Gotcha**: `ProducerService.send` reads offset from `result[0].baseOffset` — kafkajs types don't export this, so it's cast via `as Record<string, unknown>`
+- **Local Kafka**: `docker/docker-compose.yml` runs single-node Kafka 3.9.0 (KRaft mode, port 9092); connect with brokers `localhost:9092`
