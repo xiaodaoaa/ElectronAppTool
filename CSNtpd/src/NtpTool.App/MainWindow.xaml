@@ -1,0 +1,291 @@
+<Window x:Class="NtpTool.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:NtpTool.App.Converters"
+        Title="NTP TimeSync Tool"
+        Width="980" Height="760"
+        MinWidth="760" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBackgroundBrush}"
+        SnapsToDevicePixels="True"
+        FontFamily="Segoe UI Variable Text"
+        Foreground="{StaticResource PrimaryTextBrush}">
+    <Window.Resources>
+        <converters:HexBrushConverter x:Key="HexBrushConverter"/>
+        <!-- 状态指示彩点 -->
+        <Style x:Key="StateDot" TargetType="Ellipse">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Height" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style x:Key="InfoLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style x:Key="InfoValue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="StatNumber" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+        </Style>
+
+        <!-- 信息条目纵向布局 -->
+        <Style x:Key="InfoRow" TargetType="StackPanel">
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ======== 顶部 Header ======== -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="NTP TimeSync Tool" FontSize="24" FontWeight="SemiBold"
+                           Foreground="{StaticResource PrimaryTextBrush}"/>
+                <TextBlock Text="局域网时间同步工具 · NTP 客户端 / 服务端"
+                           FontSize="12" Foreground="{StaticResource SecondaryTextBrush}" Margin="1,4,0,0"/>
+            </StackPanel>
+            <!-- 状态徽章 -->
+            <Border Grid.Column="1" Padding="12,7" CornerRadius="8"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource InfoLabel}" Text="权限：" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding AdminStatusText, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource AppAccentBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ======== 时间卡片条 ======== -->
+        <Border Grid.Row="1" Margin="0,18,0,0" Padding="18,14"
+                Background="{StaticResource CardBackgroundBrush}"
+                BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Style="{StaticResource InfoRow}">
+                    <TextBlock Text="本地时间" Style="{StaticResource InfoLabel}"/>
+                    <TextBlock Text="{Binding LocalTimeText}" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource PrimaryTextBrush}"/>
+                </StackPanel>
+                <Rectangle Grid.Column="1" Width="1" Height="36" Fill="{StaticResource DividerBrush}"
+                           VerticalAlignment="Center" Margin="0,0,18,0"/>
+                <StackPanel Grid.Column="2" Style="{StaticResource InfoRow}">
+                    <TextBlock Text="UTC 时间" Style="{StaticResource InfoLabel}"/>
+                    <TextBlock Text="{Binding UtcTimeText}" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource PrimaryTextBrush}"/>
+                </StackPanel>
+                <Rectangle Grid.Column="3" Width="1" Height="36" Fill="{StaticResource DividerBrush}"
+                           VerticalAlignment="Center" Margin="0,0,18,0"/>
+                <StackPanel Grid.Column="4">
+                    <TextBlock Text="当前时间偏差" Style="{StaticResource InfoLabel}"/>
+                    <TextBlock Text="{Binding OffsetText}" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource AppAccentBrush}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ======== 客户端 / 服务端 卡片 ======== -->
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- NTP Client 卡片 -->
+            <Border Grid.Column="0" Padding="20" CornerRadius="10"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                        <TextBlock Text="NTP Client" FontSize="16" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <Border Margin="10,0,0,0" VerticalAlignment="Center">
+                            <Ellipse Style="{StaticResource StateDot}"
+                                     Fill="{Binding ClientStateColor, Converter={StaticResource HexBrushConverter}}"/>
+                        </Border>
+                        <TextBlock Text="{Binding ClientStateText}"
+                                   Margin="6,0,0,0" FontSize="13" VerticalAlignment="Center"
+                                   Foreground="{StaticResource SecondaryTextBrush}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="上游服务器" Style="{StaticResource InfoLabel}"/>
+                    <TextBox Style="{StaticResource ReadonlyBox}" Text="{Binding UpstreamServer, Mode=OneWay}"
+                             HorizontalAlignment="Stretch" Margin="0,4,0,12"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="最近同步" Style="{StaticResource InfoLabel}"/>
+                            <TextBlock Text="{Binding LastSyncTime}" Style="{StaticResource InfoValue}" Margin="0,2,0,10"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="往返延迟" Style="{StaticResource InfoLabel}"/>
+                            <TextBlock Text="{Binding DelayText}" Style="{StaticResource InfoValue}" Margin="0,2,0,10"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Content="立即同步" Command="{Binding SyncNowCommand}" Style="{StaticResource PrimaryButton}"
+                                Margin="0,0,8,0"/>
+                        <Button Content="启动自动同步" Command="{Binding StartAutoSyncCommand}" Margin="0,0,8,0"/>
+                        <Button Content="停止自动同步" Command="{Binding StopAutoSyncCommand}" Margin="0,0,8,0"/>
+                    </StackPanel>
+                    <Button Content="修改系统时间" Command="{Binding ApplySystemTimeCommand}" Margin="0,10,0,0"
+                            Style="{StaticResource DangerButton}" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- NTP Server 卡片 -->
+            <Border Grid.Column="2" Padding="20" CornerRadius="10"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                        <TextBlock Text="NTP Server" FontSize="16" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <Border Margin="10,0,0,0" VerticalAlignment="Center">
+                            <Ellipse Style="{StaticResource StateDot}"
+                                     Fill="{Binding ServerStateColor, Converter={StaticResource HexBrushConverter}}"/>
+                        </Border>
+                        <TextBlock Text="{Binding ServerStateText}" Margin="6,0,0,0" FontSize="13"
+                                   VerticalAlignment="Center" Foreground="{StaticResource SecondaryTextBrush}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="监听地址" Style="{StaticResource InfoLabel}"/>
+                    <TextBox Style="{StaticResource ReadonlyBox}" Text="{Binding ServerListenInfo, Mode=OneWay}"
+                             HorizontalAlignment="Stretch" Margin="0,4,0,12"/>
+
+                    <!-- 统计数字 -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding TotalRequests}" Style="{StaticResource StatNumber}" Foreground="{StaticResource AppAccentBrush}"/>
+                            <TextBlock Text="总请求" Style="{StaticResource InfoLabel}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding ValidRequests}" Style="{StaticResource StatNumber}"/>
+                            <TextBlock Text="有效" Style="{StaticResource InfoLabel}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="{Binding InvalidRequests}" Style="{StaticResource StatNumber}" Foreground="{StaticResource WarningBrush}" FontWeight="SemiBold"/>
+                            <TextBlock Text="非法" Style="{StaticResource InfoLabel}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="{Binding RejectedRequests}" Style="{StaticResource StatNumber}" Foreground="{StaticResource ErrorBrush}" FontWeight="SemiBold"/>
+                            <TextBlock Text="拒绝" Style="{StaticResource InfoLabel}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="最近客户端" Style="{StaticResource InfoLabel}"/>
+                    <TextBlock Text="{Binding RecentClient}" Style="{StaticResource InfoValue}" Margin="0,2,0,12"/>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="启动服务端" Command="{Binding StartServerCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                        <Button Content="停止服务端" Command="{Binding StopServerCommand}" Style="{StaticResource DangerButton}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ======== 日志区 ======== -->
+        <Border Grid.Row="3" Margin="0,16,0,0" Padding="0" CornerRadius="10"
+                Background="{StaticResource CardBackgroundBrush}"
+                BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+            <Grid Margin="20,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="运行日志" FontSize="14" FontWeight="SemiBold"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Content="打开配置" Command="{Binding OpenConfigCommand}" Margin="0,0,8,0" Padding="10,4" MinHeight="28"/>
+                        <Button Content="清除日志" Command="{Binding ClearLogCommand}" Padding="10,4" MinHeight="28"/>
+                    </StackPanel>
+                </Grid>
+                <ListView Grid.Row="1" ItemsSource="{Binding LogItems}" FontSize="12"
+                          MaxHeight="220" ScrollViewer.CanContentScroll="True">
+                    <ListView.Resources>
+                        <Style TargetType="GridViewColumnHeader">
+                            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                            <Setter Property="Background" Value="#F6F6F6"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}"/>
+                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                            <Setter Property="Padding" Value="6,4"/>
+                            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}"/>
+                        </Style>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Padding" Value="6,3"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource HoverBackgroundBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#E8F1FB"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListView.Resources>
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="时间" Width="82" DisplayMemberBinding="{Binding Time}"/>
+                            <GridViewColumn Header="级别" Width="56">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Level}" FontWeight="SemiBold"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="模块" Width="96" DisplayMemberBinding="{Binding Module}"/>
+                            <GridViewColumn Header="消息" Width="620" DisplayMemberBinding="{Binding Message}"/>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

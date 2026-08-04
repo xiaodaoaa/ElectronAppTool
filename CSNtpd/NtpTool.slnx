@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NtpTool.App/NtpTool.App.csproj" />
+    <Project Path="src/NtpTool.Core/NtpTool.Core.csproj" />
+    <Project Path="src/NtpTool.Infrastructure/NtpTool.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NtpTool.Core.Tests/NtpTool.Core.Tests.csproj" />
+    <Project Path="tests/NtpTool.Infrastructure.Tests/NtpTool.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

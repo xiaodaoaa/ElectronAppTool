@@ -1,0 +1,34 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+
+# Visual Studio
+.vs/
+.vscode/
+
+# .NET / NuGet
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+coverage/
+*.coverage
+
+# Runtime output
+logs/
+*.log
+
+# Local config
+ntp-tool-config.json
+*.tmp
+*.bak
+
+# OS
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,54 @@
+{
+  "client": {
+    "enableAutoSync": false,
+    "syncIntervalMinutes": 30,
+    "timeoutMs": 3000,
+    "retryCount": 3,
+    "retryIntervalMs": 10000,
+    "runOnceOnStart": false,
+    "applySystemTime": false,
+    "autoApplyThresholdMs": 500,
+    "maxAllowedOffsetMs": 30000,
+    "maxAcceptableDelayMs": 10000,
+    "failureWarningThreshold": 3,
+    "servers": [
+      {
+        "host": "time.windows.com",
+        "port": 123,
+        "priority": 1,
+        "enabled": true,
+        "remark": "Windows 时间服务器"
+      },
+      {
+        "host": "pool.ntp.org",
+        "port": 123,
+        "priority": 2,
+        "enabled": true,
+        "remark": "NTP 池"
+      }
+    ]
+  },
+  "server": {
+    "enableServer": false,
+    "listenAddress": "0.0.0.0",
+    "port": 123,
+    "stratum": 2,
+    "poll": 6,
+    "precision": -6,
+    "rootDelay": 65536,
+    "rootDispersion": 65536,
+    "referenceId": "LOCAL",
+    "allowAllClients": true,
+    "allowedNetworks": [],
+    "rateLimitPerMinute": 120,
+    "logRequests": true,
+    "logRejectedRequests": true
+  },
+  "log": {
+    "level": "Information",
+    "directory": "logs",
+    "maxFileSizeMb": 10,
+    "retentionDays": 30,
+    "logUdpDetails": false
+  }
+}
