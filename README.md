@@ -1,12 +1,14 @@
 # ElectronAppTool
 
-Electron 桌面工具集合，七个独立子项目组成的 monorepo。
+桌面工具集合，由八个独立子项目组成的 monorepo — 其中七个为 Electron 应用，一个为 .NET/WPF 应用。
 
-> **注意**：这是 monorepo，**没有根目录 `package.json`**。每个子项目有独立的依赖、`node_modules` 和运行脚本。请先 `cd` 到对应目录再执行命令。
+> **注意**：这是 monorepo，**没有根目录 `package.json`**。每个子项目有独立的依赖、构建工具和运行脚本。请先 `cd` 到对应目录再执行命令。
 
 ---
 
 ## 项目一览
+
+### Electron 工具（七个）
 
 | 子项目 | 技术栈 | Win7 兼容 | 用途 |
 |--------|--------|-----------|------|
@@ -17,6 +19,12 @@ Electron 桌面工具集合，七个独立子项目组成的 monorepo。
 | [ERabbitMQToolPlus](./ERabbitMQToolPlus/) | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `amqplib` | ❌ | RabbitMQ 调试工具增强版 — 三进程架构、连接/生产者/消费者单例服务、配置加密持久化 |
 | [EActiveMQTool](./EActiveMQTool/) | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `@stomp/stompjs` | ❌ | ActiveMQ 调试工具 — STOMP over TCP/WebSocket 双模式、连接管理、生产者发布、消费者订阅、JMS selector 支持 |
 | [EKafkaTool](./EKafkaTool/) | Electron 33 + Vue 3 + Element Plus + Pinia + electron-vite + `kafkajs` | ❌ | Kafka 教学演示工具 — 连接管理、Topic 管理、生产者发布、消费者订阅、6 个教学演示场景、消息重放 |
+
+### .NET 工具（一个）
+
+| 子项目 | 技术栈 | Win7 兼容 | 用途 |
+|--------|--------|-----------|------|
+| [CSNtpd](./CSNtpd/) | .NET 10 + WPF + xUnit | ❌ | NTP 时间同步工具 — NTP 客户端（向上游同步）+ NTP 服务端（局域网授时）、图形化设置、系统托盘、系统时间修正 |
 
 ---
 
@@ -103,9 +111,27 @@ npm run package:win  # electron-vite build + electron-builder --win → release/
 
 > 如遇 `Electron uninstall` 错误或 `node_modules/electron/dist/electron.exe` 缺失，手动跑 `node node_modules/electron/install.js` 下载二进制。
 
+### CSNtpd
+
+```bash
+cd CSNtpd
+dotnet restore                        # 还原 NuGet 依赖
+dotnet build NtpTool.slnx             # 构建全部项目（App/Core/Infrastructure/Tests）
+dotnet test NtpTool.slnx              # 运行 xUnit 单元/集成测试
+dotnet run --project src/NtpTool.App  # 启动 WPF 应用（开发调试）
+
+# 绿色单文件发布（自包含 .NET 运行时，目标机无需安装依赖，双击即用）
+dotnet publish src/NtpTool.App -c Release -r win-x64 --self-contained \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+```
+
+> 产物位于 `src/NtpTool.App/bin/Release/net10.0-windows/win-x64/publish/NtpTool.App.exe`。修改系统时间或监听 123 端口需管理员权限。详见 `CSNtpd/docs/USER_GUIDE.md`。
+
 ---
 
-## npm 脚本说明
+## 命令说明
+
+### Electron 项目（npm 脚本）
 
 | 命令 | 适用项目 | 说明 |
 |------|----------|------|
@@ -114,6 +140,16 @@ npm run package:win  # electron-vite build + electron-builder --win → release/
 | `npm run preview` | 全部 | 预览 Vite 构建产物 |
 | `npm run pack` | 全部（EKafkaTool 为 `package:win`） | Vite 构建 → electron-builder 打包 Windows NSIS 安装包 |
 | `npm run typecheck` | ERabbitMQToolPlus / EActiveMQTool / EKafkaTool | 类型检查（前两者 tsc + vue-tsc 两段，EKafkaTool 仅 vue-tsc 单段） |
+
+### .NET 项目（dotnet CLI）
+
+| 命令 | 适用项目 | 说明 |
+|------|----------|------|
+| `dotnet restore` | CSNtpd | 还原 NuGet 依赖 |
+| `dotnet build NtpTool.slnx` | CSNtpd | 构建解决方案（App/Core/Infrastructure/Tests） |
+| `dotnet test NtpTool.slnx` | CSNtpd | 运行 xUnit 测试（Core.Tests + Infrastructure.Tests） |
+| `dotnet run --project src/NtpTool.App` | CSNtpd | 启动 WPF 应用 |
+| `dotnet publish ... --self-contained` | CSNtpd | 生成绿色单文件 exe（含运行时） |
 
 ### dev 机制
 
@@ -132,7 +168,7 @@ npm run package:win  # electron-vite build + electron-builder --win → release/
 
 ## 技术架构
 
-### 三进程模型（全部七个项目通用）
+### Electron 三进程模型（七个 Electron 项目通用）
 
 ```
 Main Process
@@ -202,6 +238,41 @@ ERabbitMQToolPlus 使用 Electron 43，**不支持 Win7**。EActiveMQTool 同样
 ### 配置持久化
 
 配置（服务设置、连接 URL）以 JSON 文件形式保存到 `app.getPath('userData')`。EWebsocketMan 有 300ms 防抖自动保存；EHttpServerTool 使用 `PathConfigManager` 类管理；ERabbitMQTool 保存连接配置（host/port/vhost/凭据/SSL 选项）到 `config.json`。ERabbitMQToolPlus/EActiveMQTool 使用 `electron-store` + AES-256-CBC 加密密码。EKafkaTool 用 JSON 文件（`connections.json`）+ `safeStorage` 加密密码（不可用时 base64 兜底），**不使用 electron-store**。
+
+### CSNtpd 架构（.NET/WPF，独立于 Electron 体系）
+
+CSNtpd 采用经典的分层 + 依赖注入架构，与七个 Electron 项目的技术栈完全不同：
+
+```
+NtpTool.App（WPF 启动层）
+├── MVVM：MainViewModel / SettingsViewModel + ObservableObject / RelayCommand 基类
+├── CompositionRoot：Microsoft.Extensions.DependencyInjection 依赖注入容器
+├── Services：SettingsService（设置加载）、TrayIcon（系统托盘 NotifyIcon）
+└── 引用 Core + Infrastructure
+
+NtpTool.Core（核心业务层，无 UI 依赖）
+├── Ntp/：NtpPacket（RFC 4330 报文）、NtpPacketCodec（编解码）、NtpQueryClient（UDP 查询）、TimeCalculator（时间偏差计算）
+├── Services/：INtpClientService / INtpServerService / ISystemTimeService 等接口 + 实现（NtpClientService / NtpServerService / SyncScheduler / NetworkAccessController / ConfigValidator）
+├── Models/：AppSettings / NtpClientOptions / NtpServerOptions / NtpSyncResult 等配置与结果模型
+└── Logging/：IAppLogger / LogLevel 抽象
+
+NtpTool.Infrastructure（基础设施层）
+├── Config/：JsonConfigurationRepository（JSON 配置读写，实现 Core 的 IConfigurationRepository）
+├── Logging/：FileLogger（文件日志 + 滚动 + 保留期，实现 Core 的 IAppLogger）
+└── Windows/：WindowsSystemTimeService（调用 Win32 API 修改系统时间，实现 Core 的 ISystemTimeService）
+
+tests/（xUnit 测试）
+├── NtpTool.Core.Tests：NtpPacketCodec / TimeCalculator / ConfigValidator / NetworkAccessController / SyncScheduler / NtpServerIntegrationTests
+└── NtpTool.Infrastructure.Tests：FileLogger / JsonConfigurationRepository
+```
+
+**关键设计**：
+- **客户端 + 服务端一体**：既能向上游 NTP 服务器同步时间（UDP 123），也能作为 NTP 服务端为局域网授时
+- **系统时间修正**：通过 `WindowsSystemTimeService` 调用 Win32 `SetSystemTime` API，需管理员权限；大偏差（超过 `maxAllowedOffsetMs`）不会自动修改，需人工确认
+- **单实例**：通过互斥锁保证同一时间只运行一个实例，重复启动激活已有窗口
+- **系统托盘**：关闭主窗口最小化到托盘，托盘菜单提供同步/启停服务端/设置/退出
+- **配置**：`ntp-tool-config.json`（程序目录），图形化设置界面（Windows 11 风格，客户端/服务端/日志三页）
+- **限流与白名单**：服务端支持每 IP 每分钟限流、CIDR 白名单、请求日志记录
 
 ---
 
@@ -296,6 +367,20 @@ electron/
 
 > 详见 `EKafkaTool/AGENTS.md`。
 
+### CSNtpd — NTP 时间同步工具
+
+基于 .NET 10 + WPF 的 NTP 时间同步桌面工具，同时具备 NTP 客户端和 NTP 服务端能力，面向 Windows 10/11（不支持 Win7）：
+
+- **NTP 客户端**：向上游 NTP 服务器（如 `time.windows.com`、`pool.ntp.org`、局域网 `192.168.x.x`）发起 UDP 123 同步请求，按 priority 升序尝试多服务器；支持自动定时同步、失败重试、超时控制
+- **NTP 服务端**：监听 UDP 端口（标准 123 或自定义）为局域网客户端授时；支持 Stratum/Reference ID 配置、每 IP 限流、CIDR 白名单、请求日志
+- **系统时间修正**：按同步结果偏差调整本机时间（Win32 `SetSystemTime` API，需管理员）；大偏差不自动修改需人工确认
+- **图形化设置**：Windows 11 风格设置界面（左侧导航 + 右侧卡片），客户端/服务端/日志三页，所见即所得
+- **系统托盘**：关闭主窗口最小化到托盘，托盘菜单快捷操作（同步/启停服务端/设置/退出）
+- **单实例**：互斥锁保证只运行一个实例，重复启动激活已有窗口
+- **日志**：文件日志 + 滚动（按大小）+ 保留期清理，可选 UDP 详细日志
+
+**结构**：三层架构（App/Core/Infrastructure）+ 依赖注入（`CompositionRoot` 用 `Microsoft.Extensions.DependencyInjection`），MVVM 模式（`ObservableObject`/`RelayCommand` 基类）。详见 `CSNtpd/docs/USER_GUIDE.md` 和 `CSNtpd/docs/CSNtpd需求设计文档.md`。
+
 ---
 
 ## 目录结构规范
@@ -365,12 +450,47 @@ ERabbitMQToolPlus/
 └── AGENTS.md            # 子项目专属 agent 指引
 ```
 
+### .NET 项目（CSNtpd）
+
+```
+CSNtpd/
+├── NtpTool.slnx                    # 解决方案（.slnx 格式）
+├── ntp-tool-config.json.sample     # 配置示例
+├── res/
+│   └── app.ico                     # 应用图标
+├── docs/                            # 设计文档 + 用户指南
+├── src/
+│   ├── NtpTool.App/                # WPF 启动层（MVVM + DI + 托盘）
+│   │   ├── App.xaml(.cs)           # WPF 入口
+│   │   ├── CompositionRoot.cs      # 依赖注入容器
+│   │   ├── MainViewModel.cs        # 主窗口 VM
+│   │   ├── MainWindow.xaml(.cs)    # 主窗口
+│   │   ├── SettingsViewModel.cs    # 设置 VM
+│   │   ├── SettingsWindow.xaml(.cs)# 设置窗口
+│   │   ├── Mvvm/                   # ObservableObject / RelayCommand 基类
+│   │   ├── Services/               # SettingsService / TrayIcon
+│   │   └── Converters/             # HexBrushConverter
+│   ├── NtpTool.Core/              # 核心业务层（无 UI 依赖）
+│   │   ├── Ntp/                    # NtpPacket / NtpPacketCodec / NtpQueryClient / TimeCalculator
+│   │   ├── Services/              # 接口 + 实现（NtpClient/Server/SyncScheduler/NetworkAccess/ConfigValidator）
+│   │   ├── Models/                # AppSettings / NtpClientOptions / NtpServerOptions / NtpSyncResult
+│   │   └── Logging/               # IAppLogger / LogLevel
+│   └── NtpTool.Infrastructure/    # 基础设施层
+│       ├── Config/                # JsonConfigurationRepository
+│       ├── Logging/                # FileLogger
+│       └── Windows/               # WindowsSystemTimeService（Win32 API）
+└── tests/
+    ├── NtpTool.Core.Tests/         # xUnit：编解码/时间计算/配置校验/网络控制/调度/服务端集成
+    └── NtpTool.Infrastructure.Tests/ # xUnit：文件日志/配置仓储
+```
+
 ---
 
 ## 开发说明
 
 - 修改共享工具配置（vite config、electron-builder、dev 启动脚本）时，**EHttpServerTool、EWebsocketTool 和 ERabbitMQTool** 脚手架几乎一致，通常三处需同步更新。EWebsocketMan 配置独立。
-- 设计文档和决策记录位于各子项目的 `docs/superpowers/` 和 `.superpowers/sdd/` 目录，供追溯历史决策。
+- **CSNtpd** 是唯一的 .NET 项目，使用 `dotnet` CLI 而非 npm，构建/测试/运行命令独立，与 Electron 项目无共享配置。修改时注意三层（App/Core/Infrastructure）的依赖方向：App → Core + Infrastructure，Infrastructure → Core，测试项目引用对应被测层。
+- 设计文档和决策记录位于各子项目的 `docs/`、`docs/superpowers/` 和 `.superpowers/sdd/` 目录，供追溯历史决策。
 
 ---
 
