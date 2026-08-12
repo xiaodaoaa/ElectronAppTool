@@ -1,6 +1,6 @@
 # ElectronAppTool
 
-桌面工具集合 monorepo — 七个 Electron 应用 + 一个 .NET/WPF 应用，各自独立依赖与构建。
+桌面工具集合 monorepo — 七个 Electron 应用 + 一个 .NET/WPF 应用 + 一个 C++ 插件，各自独立依赖与构建。
 
 > 无根目录 `package.json`。每个子项目独立，请先 `cd` 到对应目录再执行命令。
 
@@ -16,6 +16,7 @@
 | [EActiveMQTool](./EActiveMQTool/) | Electron 43 + Vue 3 + Element Plus + `@stomp/stompjs` | ❌ | ActiveMQ 调试（STOMP over TCP/WS） |
 | [EKafkaTool](./EKafkaTool/) | Electron 33 + Vue 3 + Element Plus + `kafkajs` | ❌ | Kafka 教学演示 |
 | [CSNtpd](./CSNtpd/) | .NET 10 + WPF + xUnit | ❌ | NTP 时间同步（客户端 + 服务端） |
+| [NStringTool](./NStringTool/) | C++17 + CMake + Notepad++ Plugin SDK | — | Notepad++ 字符串转义插件（C++/JSON/HTML/URL） |
 
 ## 快速开始
 
@@ -37,11 +38,23 @@ dotnet publish src/NtpTool.App -c Release -r win-x64 --self-contained \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true  # 绿色单文件
 ```
 
+NStringTool（C++ 项目，需 Visual Studio + CMake）：
+
+```bash
+cd NStringTool
+cmake -B build64 -G "Visual Studio 14 2015 Win64"   # 或 -G "Visual Studio 17 2022" -A x64
+cmake --build build64 --config Release              # 产物 build64/bin/Release/NStringTool.dll
+```
+
+> DLL 复制到 `<Notepad++>\plugins\NStringTool\NStringTool.dll`，重启 Notepad++。
+
 ## 架构
 
 **Electron 项目**统一三进程模型：主进程持有所有网络逻辑（http/ws/Kafka/STOMP），渲染进程仅通过 `window.electronAPI`/`window.api`/`window.kafkaApi` 经 IPC 通信，`contextIsolation: true`。三种构建方式：独立 `electron/` 目录（前四个项目）、`vite-plugin-electron`（EWebsocketMan）、`electron-vite`（后三个项目）。
 
 **CSNtpd** 为三层 + 依赖注入架构：`NtpTool.App`（WPF/MVVM）→ `NtpTool.Core`（NTP 协议与业务接口）→ `NtpTool.Infrastructure`（JSON 配置/文件日志/Win32 系统时间），xUnit 测试覆盖 Core 与 Infrastructure。
+
+**NStringTool** 为 C++17 + CMake 项目，基于 Notepad++ Plugin SDK 与 Scintilla API，转换核心层（4 个 Converter）独立于插件入口，便于单元测试。成果物 `NStringTool.dll`（x64 PE32+）。
 
 Win7 兼容的三个项目（EWebsocketTool/EWebsocketMan/ERabbitMQTool）使用 Electron 22.3.27，`pack` 脚本含 `-c.electronDist`/`-c.electronVersion` 强制本地二进制。
 
