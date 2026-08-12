@@ -1,0 +1,14 @@
+build/
+build-*/
+build*/
+bin/
+*.dll
+*.obj
+*.exp
+*.lib
+*.pdb
+.vs/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CMakeSettings.json
