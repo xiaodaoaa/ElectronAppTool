@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Layout
 
-This is a **monorepo of seven independent Electron desktop tools** for network debugging. There is **no root `package.json`** — each subdirectory is a self-contained app with its own `package.json`, dependencies, and `node_modules`. Always `cd` into the relevant subproject before running any command.
+This is a **monorepo of nine independent desktop tools** — seven Electron apps, one .NET/WPF app, one C++ Notepad++ plugin. There is **no root `package.json`** — each subdirectory is self-contained with its own dependencies and build tooling. Always `cd` into the relevant subproject before running any command.
 
 | Subproject | Stack | Win7 Compat | Build Approach | Purpose |
 |------------|-------|-------------|----------------|---------|
@@ -15,12 +15,16 @@ This is a **monorepo of seven independent Electron desktop tools** for network d
 | `ERabbitMQToolPlus/` | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `amqplib` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | RabbitMQ debugging enhanced: singleton services, encrypted config persistence, two-stage typecheck |
 | `EActiveMQTool/` | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `@stomp/stompjs` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | ActiveMQ debugging: STOMP over TCP/WebSocket, producer/consumer, JMS selector, TCP socket adapter |
 | `EKafkaTool/` | Electron 33 + Vue 3 + Element Plus + Pinia + electron-vite + `kafkajs` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | Kafka teaching tool: connection/topic management, producer/consumer, 6 demo scenarios, message replay |
+| `CSNtpd/` | .NET 10 + WPF + xUnit | ❌ | `dotnet` CLI, three-layer solution `NtpTool.slnx` | NTP time sync tool: NTP client (upstream sync) + NTP server (LAN time service), system tray, system time correction |
+| `NStringTool/` | C++17 + CMake + Notepad++ Plugin SDK + Scintilla API | — | CMake + Visual Studio (2015 Win64 / 2022 x64) → `NStringTool.dll` | Notepad++ string escape/unescape plugin (C++/JSON/HTML/XML/URL) |
 
 ## Commands (run inside a subproject)
 
 ```bash
 # Dependencies
-npm install
+npm install          # Electron projects
+dotnet restore       # CSNtpd
+# NStringTool: no install step, needs VS + CMake on PATH
 
 # Development — Vite dev server + Electron window
 npm run dev          # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool
@@ -28,24 +32,43 @@ npm run dev          # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbi
 # Development — electron-vite three-process HMR
 npm run dev          # ERabbitMQToolPlus / EActiveMQTool / EKafkaTool (run inside that dir)
 
+# Development — .NET
+dotnet run --project src/NtpTool.App   # CSNtpd
+
+# Development — C++ plugin (generates DLL, load into Notepad++ to test)
+cmake -B build64 -G "Visual Studio 14 2015 Win64"   # NStringTool, VS2015
+cmake -B build -G "Visual Studio 17 2022" -A x64    # NStringTool, VS2022
+cmake --build build64 --config Release              # → build64/bin/Release/NStringTool.dll
+
 # Build (Vite → dist/)
-npm run build
+npm run build        # all Electron apps
 
 # Build (electron-vite → out/)
 npm run build        # ERabbitMQToolPlus / EActiveMQTool / EKafkaTool
 
+# Build (.NET solution)
+dotnet build NtpTool.slnx   # CSNtpd (App/Core/Infrastructure/Tests)
+
 # Preview build
-npm run preview      # all apps
+npm run preview      # all Electron apps
 
 # Package Windows NSIS installer → release/
 npm run pack         # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbitMQTool / ERabbitMQToolPlus / EActiveMQTool
 npm run package:win  # EKafkaTool (different script name)
+
+# Package .NET green single-file (self-contained, no runtime needed on target)
+dotnet publish src/NtpTool.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true  # CSNtpd
 
 # Typecheck (ERabbitMQToolPlus / EActiveMQTool / EKafkaTool)
 npm run typecheck    # ERabbitMQToolPlus/EActiveMQTool: tsc(node) + vue-tsc(web) two-stage; EKafkaTool: vue-tsc single-stage — MUST run after editing
 
 # Lint (EKafkaTool only)
 npm run lint         # eslint .ts/.vue
+
+# Tests
+dotnet test NtpTool.slnx                          # CSNtpd: xUnit (Core.Tests + Infrastructure.Tests)
+cmake --build build64 --target ConverterTests --config Debug && ./build64/Debug/ConverterTests.exe  # NStringTool: converter unit tests
+# EHttpServerTool: three *.test.js files at project root use Jest globals but NO test runner is configured — must install Jest and add a `test` script first
 ```
 
 ### dev script mechanism
@@ -57,16 +80,16 @@ npm run lint         # eslint .ts/.vue
 ### pack command variations
 
 - **EWebsocketTool**, **EWebsocketMan** and **ERabbitMQTool** (Win7-compatible): `pack` includes `-c.electronDist="node_modules/electron/dist" -c.electronVersion="22.3.27"` to force electron-builder to use the locally-installed Electron 22 binary rather than downloading Electron 33+.
-- **EHttpServerTool** (not Win7): `pack` does NOT need the electronDist override — electron-builder uses whatever Electron version is in `node_modules`.
+- **EHttpServerTool** (not Win7): `pack` includes `-c.electronDist="node_modules/electron/dist" -c.electronVersion="33.4.11"`.
 - **ERabbitMQToolPlus** (not Win7): `pack` runs `electron-vite build && electron-builder --win` — no electronDist override needed (Electron 43).
 - **EActiveMQTool** (not Win7): same as ERabbitMQToolPlus — `pack` runs `electron-vite build && electron-builder --win`.
 - **EKafkaTool** (not Win7): `package:win` runs `electron-vite build && electron-builder --win` — no electronDist override needed (Electron 33). Note the script name is `package:win`, not `pack`.
 
-## Architecture (shared across all seven apps)
+## Architecture (shared across the seven Electron apps)
 
 ### Three-process model
 
-All apps follow the same split, regardless of frontend framework (React vs Vue):
+All Electron apps follow the same split, regardless of frontend framework (React vs Vue):
 
 ```
 Main process (electron/main.js or src/main/main.js or src/main/index.ts)
@@ -123,21 +146,17 @@ Every app uses the same two flavors, through `window.electronAPI` (first four ap
 
 ### Module structure (main process)
 
-Three of four apps keep networking logic separate from the Electron wiring:
-
-- **EHttpServerTool**: `electron/modules/` with separate files for HTTP server, path config, request logging, and file logging — `main.js` wires them together
+- **EHttpServerTool**: `electron/modules/` with separate files for HTTP server, path config, request logging, and file logging — `main.js` wires them together. When adding server behavior, edit the manager classes in `electron/modules/`, not `main.js`.
 - **EWebsocketTool** / **EWebsocketMan**: Server/client logic is inline in `main.js` since the WS state is simpler
-- **ERabbitMQTool**: RabbitMQ connection/channel/consumer logic is inline in `main.js` (amqplib operations + IPC registration)
+- **ERabbitMQTool**: RabbitMQ connection/channel/consumer logic is inline in `electron/main.js` (amqplib operations + IPC registration)
 - **ERabbitMQToolPlus**: Business logic in `src/main/services/` as singletons (`ConnectionManager`, `ProducerService`, `ConsumerService`); `src/main/ipc/` only forwards args; `src/main/utils/` has ssl/store/logger
-
-When adding server behavior to EHttpServerTool, edit the manager classes in `electron/modules/`, not `main.js`. For ERabbitMQToolPlus, edit the services in `src/main/services/`.
 
 ### Windows 7 compatibility
 
 Three apps (EWebsocketTool, EWebsocketMan, ERabbitMQTool) run on Windows 7 x64 via Electron 22.3.27 — the last Electron version with Win7 support (Electron 23+ dropped it). The downgrade affects only:
 - `electron` devDependency version
 - `pack` script electronDist override
-- Build target may need adjustment (`vite.config.ts` `build.target` for EWebsocketTool and ERabbitMQTool is `chrome108`)
+- Build target may need adjustment (`vite.config.ts` `build.target` for EWebsocketTool is `chrome108`)
 
 ERabbitMQToolPlus uses Electron 43 and does NOT support Win7. EActiveMQTool also uses Electron 43 and does NOT support Win7. EKafkaTool uses Electron 33 and does NOT support Win7.
 
@@ -156,7 +175,7 @@ Configs (server settings, connection URLs) are saved to `app.getPath('userData')
 
 ### EHttpServerTool
 
-The only app with tests — three `*.test.js` files at project root (`http-server.test.js`, `path-config.test.js`, `request-logger.test.js`). They use Jest globals (`describe`/`it`/`expect`) against real `http`/`fs` resources (temp dir, real port) but **no test runner is configured** — must install Jest and add a `test` script.
+The only Electron app with tests — three `*.test.js` files at project root (`http-server.test.js`, `path-config.test.js`, `request-logger.test.js`). They use Jest globals (`describe`/`it`/`expect`) against real `http`/`fs` resources (temp dir, real port) but **no test runner is configured** — must install Jest and add a `test` script.
 
 ### ERabbitMQTool
 
@@ -215,3 +234,48 @@ Kafka teaching/demonstration tool built on `kafkajs` with electron-vite three-pr
 - **`package.json` `main`**: `./out/main/index.mjs` (note `.mjs` extension, because `"type": "module"`); preload path is `../preload/index.mjs`
 - **Gotcha**: `ProducerService.send` reads offset from `result[0].baseOffset` — kafkajs types don't export this, so it's cast via `as Record<string, unknown>`
 - **Local Kafka**: `docker/docker-compose.yml` runs single-node Kafka 3.9.0 (KRaft mode, port 9092); connect with brokers `localhost:9092`
+
+### CSNtpd
+
+NTP time sync tool built on .NET 10 + WPF, independent of the Electron architecture. Three-layer + dependency injection:
+
+- **NtpTool.App** (WPF startup layer): MVVM (`MainViewModel`/`SettingsViewModel` + `ObservableObject`/`RelayCommand` base classes), `CompositionRoot` configures `Microsoft.Extensions.DependencyInjection`, `Services/` has `SettingsService` + `TrayIcon` (system tray via `NotifyIcon`). References Core + Infrastructure.
+- **NtpTool.Core** (core business layer, no UI dependency): `Ntp/` has `NtpPacket` (RFC 4330 packet), `NtpPacketCodec` (encode/decode), `NtpQueryClient` (UDP query), `TimeCalculator` (offset/delay calc); `Services/` has interfaces + implementations (`NtpClientService`/`NtpServerService`/`SyncScheduler`/`NetworkAccessController`/`ConfigValidator`); `Models/` has `AppSettings`/`NtpClientOptions`/`NtpServerOptions`/`NtpSyncResult`; `Logging/` has `IAppLogger`/`LogLevel` abstraction.
+- **NtpTool.Infrastructure** (infrastructure layer): `Config/` has `JsonConfigurationRepository` (JSON config read/write, implements Core's `IConfigurationRepository`); `Logging/` has `FileLogger` (file logging + rolling + retention, implements Core's `IAppLogger`); `Windows/` has `WindowsSystemTimeService` (calls Win32 `SetSystemTime` API, implements Core's `ISystemTimeService`).
+- **tests/**: xUnit — `NtpTool.Core.Tests` (NtpPacketCodec/TimeCalculator/ConfigValidator/NetworkAccessController/SyncScheduler/NtpServerIntegrationTests), `NtpTool.Infrastructure.Tests` (FileLogger/JsonConfigurationRepository).
+
+Key design:
+- **Client + server in one**: syncs time from upstream NTP servers (UDP 123) AND serves as NTP server for LAN
+- **System time correction**: via `WindowsSystemTimeService` calling Win32 `SetSystemTime` API, requires admin; large offset (over `maxAllowedOffsetMs`) won't auto-modify, needs manual confirmation
+- **Single instance**: mutex lock ensures only one instance runs; repeat launch activates existing window
+- **System tray**: closing main window minimizes to tray; tray menu has sync/start-stop server/settings/exit
+- **Config**: `ntp-tool-config.json` (program directory), graphical settings UI (Windows 11 style, client/server/log pages)
+- **Rate limit & whitelist**: server supports per-IP rate limit, CIDR whitelist, request logging
+- **`.gitignore`**: excludes `bin/`, `obj/`, `logs/`, `*.log`, local `ntp-tool-config.json`
+
+### NStringTool
+
+Notepad++ string escape/unescape plugin built on C++17 + CMake, independent of the Electron/.NET architecture.
+
+- **Plugin entry**: `src/PluginEntry.cpp` — DLL exports + menu registration (8 operations under "Plugins → NStringTool" menu)
+- **Editor ops**: `src/EditorOps.cpp/.h` — Scintilla API operations (read/write selection or whole document, single Ctrl+Z undo per conversion)
+- **Converters**: `src/converters/` — four format converters, each a pair of `.cpp/.h`:
+  - `CppConverter` — C/C++ escape/unescape (`\n \t \" \\ \xNN \uNNNN`)
+  - `JsonConverter` — JSON escape/unescape (`\" \\ \n \t \uXXXX`, RFC 8259)
+  - `HtmlConverter` — HTML/XML entity escape/unescape (`&lt; &gt; &amp; &#60; &#x3C;`)
+  - `UrlConverter` — URL encode/decode (`%20 %2F`, RFC 3986)
+  - `Converters.h` — converter interface
+- **SDK**: `sdk/` — Notepad++ Plugin SDK headers (`PluginInterface.h`, `Notepad_plus_msgs.h`, `Scintilla.h`, `Sci_Position.h`)
+- **Tests**: `tests/` — converter core unit tests (`test_main.cpp`, `test_converters.cpp`, `test_macros.h`), built as `ConverterTests` target
+- **Build**: CMake + Visual Studio. VS 2015 default generator is Win32 — MUST use `Win64` variant (`-G "Visual Studio 14 2015 Win64"`) or `-A x64` for VS 2022, else the Win32 DLL won't load into 64-bit Notepad++.
+- **Artifact**: `build64/bin/Release/NStringTool.dll` (x64, PE32+) — committed to repo (`.gitignore` excludes `*.dll` but this one is force-added). Copy to `<Notepad++>\plugins\NStringTool\NStringTool.dll` (must be in a subfolder named after the plugin, Notepad++ 7.6+ requirement), restart Notepad++.
+- **`.gitignore`**: excludes `build/`, `build-*/`, `build*/`, `bin/`, `*.dll` (except the committed artifact), `*.obj`, `*.lib`, `*.pdb`, `CMakeCache.txt`, `CMakeFiles/`
+
+## Common gotchas
+
+- **Electron binary not downloaded**: `node_modules/electron/dist/electron.exe` missing — run `node node_modules/electron/install.js` manually. Symptom: `npm run dev` reports `Electron uninstall` error.
+- **EKafkaTool script name**: `npm run package:win` (not `pack`).
+- **EKafkaTool `main` extension**: `./out/main/index.mjs` (`.mjs` because `"type": "module"`).
+- **NStringTool platform**: must build x64 (`Win64`/`-A x64`), Win32 DLL won't load into 64-bit Notepad++.
+- **EKafkaTool renderer API types**: hand-written in `src/renderer/api/kafkaApi.ts`, must be kept in sync manually with preload.
+- For deeper per-project guidance, see `ERabbitMQToolPlus/AGENTS.md` and `EKafkaTool/AGENTS.md`.
