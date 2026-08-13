@@ -4,6 +4,7 @@
 #include "converters/JsonConverter.h"
 #include "converters/HtmlConverter.h"
 #include "converters/UrlConverter.h"
+#include "converters/HexArrayConverter.h"
 #include <string>
 
 void runConverterTests() {
@@ -94,4 +95,26 @@ void runConverterTests() {
     // ---- convert 分发 ----
     ASSERT_EQ(convert(Format::Cpp, Direction::Escape, "a\nb"), std::string("a\\nb"));
     ASSERT_EQ(convert(Format::Cpp, Direction::Unescape, "a\\nb"), std::string("a\nb"));
+
+    // ---- hex → C 数组（无分隔）----
+    ASSERT_EQ(hexToCArray("1122334455FFEE"),
+              std::string("{0x11, 0x22, 0x33, 0x44, 0x55, 0xFF, 0xEE}"));
+    ASSERT_EQ(hexToCArray("FF"), std::string("{0xFF}"));
+    ASSERT_EQ(hexToCArray("00"), std::string("{0x00}"));
+    // 小写 hex
+    ASSERT_EQ(hexToCArray("ffee"), std::string("{0xFF, 0xEE}"));
+
+    // ---- hex → C 数组（带空格/空白）----
+    ASSERT_EQ(hexToCArray("11 22 33 44 55 FF EE"),
+              std::string("{0x11, 0x22, 0x33, 0x44, 0x55, 0xFF, 0xEE}"));
+    // 混合空白（空格 + Tab + 换行）也兼容
+    ASSERT_EQ(hexToCArray("11\t22 33\n44"),
+              std::string("{0x11, 0x22, 0x33, 0x44}"));
+
+    // ---- 非法输入：含非十六进制字符或奇数位，原样返回 ----
+    ASSERT_EQ(hexToCArray("11GG"), std::string("11GG"));
+    ASSERT_EQ(hexToCArray("112"), std::string("112"));          // 奇数个 hex 位（3 位）
+    ASSERT_EQ(hexToCArray("11 2"), std::string("11 2"));        // 空格分隔后单个位
+    ASSERT_EQ(hexToCArray(""), std::string(""));                // 空输入
+    ASSERT_EQ(hexToCArray("   "), std::string("   "));          // 纯空白
 }

@@ -1,6 +1,7 @@
 #include "PluginInterface.h"
 #include "EditorOps.h"
 #include "Converters.h"
+#include "converters/HexArrayConverter.h"
 #include <windows.h>
 #include <cwchar>
 
@@ -22,6 +23,8 @@ namespace {
         // URL
         IDX_URL_ESCAPE,
         IDX_URL_UNESCAPE,
+        // 十六进制 → C 数组
+        IDX_HEX_TO_ARRAY,
         MENU_COUNT
     };
 
@@ -35,6 +38,7 @@ namespace {
         L"HTML/XML 实体 - 去转义",
         L"URL 编码 - 转义",
         L"URL 编码 - 去转义",
+        L"十六进制 - 转C数组",
     };
 
     FuncItem g_funcItems[MENU_COUNT];
@@ -48,6 +52,8 @@ namespace {
     void onHtmlUnescape() { applyConversion(Format::Html, Direction::Unescape); }
     void onUrlEscape()    { applyConversion(Format::Url,  Direction::Escape); }
     void onUrlUnescape()  { applyConversion(Format::Url,  Direction::Unescape); }
+    // 十六进制转 C 数组：自动跳过空白，兼容无分隔/带空格两种输入
+    void onHexToArray()   { applyConversionWith(hexToCArray); }
 }
 
 extern "C" __declspec(dllexport) void setInfo(NppData nppData) {
@@ -64,7 +70,8 @@ extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* nbFItems) {
         onCppEscape, onCppUnescape,
         onJsonEscape, onJsonUnescape,
         onHtmlEscape, onHtmlUnescape,
-        onUrlEscape, onUrlUnescape
+        onUrlEscape, onUrlUnescape,
+        onHexToArray
     };
     for (int i = 0; i < MENU_COUNT; ++i) {
         wcscpy_s(g_funcItems[i]._itemName, menuItemSize, kMenuNames[i]);

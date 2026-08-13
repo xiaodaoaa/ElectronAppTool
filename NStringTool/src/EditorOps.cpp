@@ -31,6 +31,12 @@ void setNppHandles(HWND nppHandle, HWND scintillaMain, HWND scintillaSecond) {
 }
 
 void applyConversion(Format format, Direction direction) {
+    applyConversionWith([&](const std::string& input) {
+        return convert(format, direction, input);
+    });
+}
+
+void applyConversionWith(ConvertFn fn) {
     if (!g_nppHandle) return;
 
     HWND sci = getCurrentScintilla();
@@ -57,7 +63,7 @@ void applyConversion(Format format, Direction direction) {
         sciSend(sci, SCI_GETTEXTRANGEFULL, 0, reinterpret_cast<LPARAM>(&tr));
 
         std::string input(buf.data(), static_cast<size_t>(targetLen));
-        std::string output = convert(format, direction, input);
+        std::string output = fn(input);
 
         // 包裹撤销动作，替换目标范围
         sciSend(sci, SCI_BEGINUNDOACTION);

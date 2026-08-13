@@ -19,6 +19,7 @@ add_library(NStringTool SHARED
     src/converters/JsonConverter.cpp
     src/converters/HtmlConverter.cpp
     src/converters/UrlConverter.cpp
+    src/converters/HexArrayConverter.cpp
 )
 target_include_directories(NStringTool PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -44,6 +45,7 @@ add_executable(ConverterTests
     src/converters/JsonConverter.cpp
     src/converters/HtmlConverter.cpp
     src/converters/UrlConverter.cpp
+    src/converters/HexArrayConverter.cpp
 )
 target_include_directories(ConverterTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
