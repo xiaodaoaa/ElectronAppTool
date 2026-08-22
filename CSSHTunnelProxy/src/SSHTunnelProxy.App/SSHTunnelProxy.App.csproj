@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SSHTunnelProxy.Core\SSHTunnelProxy.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Assets 下的图片等资源打包为 WPF 程序集资源，可通过 pack://application:,,,/Assets/xxx 引用 -->
+    <Resource Include="Assets\**\*" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- 便携发布：仅 Windows x64，自带 .NET 运行时，用户机器无需安装 .NET。
+       打包后整个 publish 目录复制到任意可写位置即可运行（runtimes\ 下的 SQLite 原生库必须随行）。 -->
+  <PropertyGroup Condition="'$(Portable)' == 'true'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <!-- 仅保留中文本地化资源，裁掉其余语言目录 -->
+    <SatelliteResourceLanguages>zh-Hans;zh-Hant</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SSHTunnelProxy.App/SSHTunnelProxy.App.csproj" />
+    <Project Path="src/SSHTunnelProxy.Core/SSHTunnelProxy.Core.csproj" />
+    <Project Path="src/SSHTunnelProxy.Tests/SSHTunnelProxy.Tests.csproj" />
+  </Folder>
+</Solution>
