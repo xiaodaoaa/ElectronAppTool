@@ -2,9 +2,11 @@
 
 Electron 桌面工具集合 monorepo。中文交流，中文提交信息。
 
+本仓库现含 **七个 Electron 应用 + 两个 .NET/WPF 应用 + 一个 C++ 插件**，共十个独立子项目。下面仅列七个 Electron 项目；.NET 项目（CSNtpd、CSSHTunnelProxy）与 C++ 项目（NStringTool）使用 `dotnet`/`cmake` 而非 npm，详见各自子目录的 `CLAUDE.md`/`README.md` 及根 `CLAUDE.md`。
+
 ## 仓库结构
 
-**七个独立子项目**，无根 `package.json`。每个子项目有自己的 `package.json`、依赖和 `node_modules`。**必须先 `cd` 到子项目目录再执行命令。**
+**七个独立 Electron 子项目**，无根 `package.json`。每个子项目有自己的 `package.json`、依赖和 `node_modules`。**必须先 `cd` 到子项目目录再执行命令。**
 
 | 子项目 | 构建方式 | 关键依赖 |
 |--------|----------|----------|

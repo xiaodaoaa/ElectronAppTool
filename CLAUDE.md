@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Layout
 
-This is a **monorepo of nine independent desktop tools** — seven Electron apps, one .NET/WPF app, one C++ Notepad++ plugin. There is **no root `package.json`** — each subdirectory is self-contained with its own dependencies and build tooling. Always `cd` into the relevant subproject before running any command.
+This is a **monorepo of ten independent desktop tools** — seven Electron apps, two .NET/WPF apps, one C++ Notepad++ plugin. There is **no root `package.json`** — each subdirectory is self-contained with its own dependencies and build tooling. Always `cd` into the relevant subproject before running any command.
 
 | Subproject | Stack | Win7 Compat | Build Approach | Purpose |
 |------------|-------|-------------|----------------|---------|
@@ -16,6 +16,7 @@ This is a **monorepo of nine independent desktop tools** — seven Electron apps
 | `EActiveMQTool/` | Electron 43 + Vue 3 + Element Plus + Pinia + electron-vite + `@stomp/stompjs` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | ActiveMQ debugging: STOMP over TCP/WebSocket, producer/consumer, JMS selector, TCP socket adapter |
 | `EKafkaTool/` | Electron 33 + Vue 3 + Element Plus + Pinia + electron-vite + `kafkajs` | ❌ | `electron-vite` builds `src/main/` + `src/preload/` + `src/renderer/` → `out/` | Kafka teaching tool: connection/topic management, producer/consumer, 6 demo scenarios, message replay |
 | `CSNtpd/` | .NET 10 + WPF + xUnit | ❌ | `dotnet` CLI, three-layer solution `NtpTool.slnx` | NTP time sync tool: NTP client (upstream sync) + NTP server (LAN time service), system tray, system time correction |
+| `CSSHTunnelProxy/` | .NET 10 + WPF + SSH.NET + xUnit | ❌ | `dotnet` CLI, three-layer solution `SSHTunnelProxy.slnx` | SSH tunnel proxy: SOCKS5/HTTP local proxy forwarded via SSH direct-tcpip, multi-tunnel, auto-reconnect, DPAPI encryption |
 | `NStringTool/` | C++17 + CMake + Notepad++ Plugin SDK + Scintilla API | — | CMake + Visual Studio (2015 Win64 / 2022 x64) → `NStringTool.dll` | Notepad++ string escape/unescape plugin (C++/JSON/HTML/XML/URL) |
 
 ## Commands (run inside a subproject)
@@ -24,6 +25,7 @@ This is a **monorepo of nine independent desktop tools** — seven Electron apps
 # Dependencies
 npm install          # Electron projects
 dotnet restore       # CSNtpd
+# CSSHTunnelProxy: restore happens automatically on build/run (slnx)
 # NStringTool: no install step, needs VS + CMake on PATH
 
 # Development — Vite dev server + Electron window
@@ -33,7 +35,8 @@ npm run dev          # EHttpServerTool / EWebsocketTool / EWebsocketMan / ERabbi
 npm run dev          # ERabbitMQToolPlus / EActiveMQTool / EKafkaTool (run inside that dir)
 
 # Development — .NET
-dotnet run --project src/NtpTool.App   # CSNtpd
+dotnet run --project src/NtpTool.App           # CSNtpd
+dotnet run --project src/SSHTunnelProxy.App    # CSSHTunnelProxy
 
 # Development — C++ plugin (generates DLL, load into Notepad++ to test)
 cmake -B build64 -G "Visual Studio 14 2015 Win64"   # NStringTool, VS2015
@@ -47,7 +50,8 @@ npm run build        # all Electron apps
 npm run build        # ERabbitMQToolPlus / EActiveMQTool / EKafkaTool
 
 # Build (.NET solution)
-dotnet build NtpTool.slnx   # CSNtpd (App/Core/Infrastructure/Tests)
+dotnet build NtpTool.slnx           # CSNtpd (App/Core/Infrastructure/Tests)
+dotnet build SSHTunnelProxy.slnx    # CSSHTunnelProxy (App/Core/Tests)
 
 # Preview build
 npm run preview      # all Electron apps
@@ -58,6 +62,7 @@ npm run package:win  # EKafkaTool (different script name)
 
 # Package .NET green single-file (self-contained, no runtime needed on target)
 dotnet publish src/NtpTool.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true  # CSNtpd
+dotnet publish src/SSHTunnelProxy.App/SSHTunnelProxy.App.csproj -c Release -p:Portable=true  # CSSHTunnelProxy (portable, self-contained)
 
 # Typecheck (ERabbitMQToolPlus / EActiveMQTool / EKafkaTool)
 npm run typecheck    # ERabbitMQToolPlus/EActiveMQTool: tsc(node) + vue-tsc(web) two-stage; EKafkaTool: vue-tsc single-stage — MUST run after editing
@@ -67,6 +72,7 @@ npm run lint         # eslint .ts/.vue
 
 # Tests
 dotnet test NtpTool.slnx                          # CSNtpd: xUnit (Core.Tests + Infrastructure.Tests)
+dotnet test SSHTunnelProxy.slnx                   # CSSHTunnelProxy: xUnit Unit + Integration (Moq + FluentAssertions)
 cmake --build build64 --target ConverterTests --config Debug && ./build64/Debug/ConverterTests.exe  # NStringTool: converter unit tests
 # EHttpServerTool: three *.test.js files at project root use Jest globals but NO test runner is configured — must install Jest and add a `test` script first
 ```
@@ -252,6 +258,32 @@ Key design:
 - **Config**: `ntp-tool-config.json` (program directory), graphical settings UI (Windows 11 style, client/server/log pages)
 - **Rate limit & whitelist**: server supports per-IP rate limit, CIDR whitelist, request logging
 - **`.gitignore`**: excludes `bin/`, `obj/`, `logs/`, `*.log`, local `ntp-tool-config.json`
+
+### CSSHTunnelProxy
+
+SSH tunnel proxy tool built on .NET 10 + WPF + SSH.NET, independent of the Electron architecture. Three-layer + dependency injection:
+
+- **SSHTunnelProxy.Core** (`net10.0`, no UI dependency): `Models/` (SshServerProfile/AppSettings/ProxyType/AuthMethod/TunnelState/ConnectionLog), `Services/` (TunnelManager multi-tunnel lifecycle, ConfigService, LogService SQLite), `Proxy/` (Socks5ProxyServer/HttpProxyServer protocol parsing + local listen, Socks5Protocol/HttpParser/ProxyCredentialValidator), `Tunnel/` (SshTunnelTransport SSH session + reconnect monitor, SshDirectTcpipChannel, StreamRelay, TrafficCounter), `Security/` (DpapiProtector DPAPI, HostKeyVerifier TOFU), `Utils/` (AccentColorProvider, StreamRelay).
+- **SSHTunnelProxy.App** (`net10.0-windows`, WPF): `Views/` (MainWindow/ConfigDialog), `ViewModels/` (Main/TunnelItem/Config/Log/Settings — CommunityToolkit.Mvvm source generators), `Framework/` (TrayIconController/SerilogLoggerProvider/DispatcherUI/StartupRegistrar/RangeObservableCollection), `Resources/` (Win11 Fluent control styles). References Core.
+- **SSHTunnelProxy.Tests**: xUnit + Moq + FluentAssertions — `Unit/` (Socks5Protocol/HttpParser/DpapiProtector/TrafficCounter/StreamRelay/ConfigService/AccentColorProvider), `Integration/` (Socks5EndToEnd/HttpProxyEndToEnd via FakeSshTunnelTransport), `Helpers/` (FakeSshTunnelTransport/LocalFixture/CollectingSink).
+
+Key design:
+- **Custom protocol parsing (not ForwardedPortDynamic)**: builds SOCKS5/HTTP protocol layer + direct-tcpip Channel forwarding so both protocols share one `SshTunnelTransport`, enabling per-connection traffic/target stats and future rule-based routing + local auth
+- **direct-tcpip workaround**: SSH.NET 2026 made low-level Channel API internal, so `SshDirectTcpipChannel` uses public `ForwardedPortLocal` (bind temp local port `boundPort=0`, connect via `TcpClient` for bidirectional `Stream`); each proxy connection = one temp `ForwardedPortLocal`, stopped + removed after use
+- **Reconnect**: `SshTunnelTransport.MonitorLoopAsync` checks `client.IsConnected` every 2s, fires `ConnectionLost`; `TunnelManager.ReconnectLoopAsync` uses exponential backoff 5→10→20→40→60 (cap, `MaxReconnectAttempts=-1` = infinite)
+- **Portable data**: all runtime data in program directory (`AppPaths.Root = AppContext.BaseDirectory`, NOT `%APPDATA%`) — `profiles.json`/`settings.json`/`logs.db` (SQLite)/`known_hosts.json`/`logs/app-.log`
+- **Sensitive data**: `DpapiProtector` (`ProtectedData`, CurrentUser scope + additional entropy) encrypts passwords, private key passphrases, proxy passwords, embedded private key content; host keys via TOFU (`HostKeyVerifier`)
+- **HTTP proxy CONNECT only**: first phase supports CONNECT tunnel mode (covers HTTPS), plain GET/POST forwarding out of scope
+- **UI**: Win11 Fluent, light single theme; accent color read at runtime and injected via `AccentColorProvider`; sidebar nav (tunnels/logs/settings)
+
+Gotchas (from `CSSHTunnelProxy/CLAUDE.md`):
+- **Restart must not call `_manager.RestartTunnelAsync` directly**: it creates a new transport but doesn't wire its `StateChanged` to the ViewModel → status dot/text won't update after reconnect. Use the stop-old-context → `StartTunnelAsync` → `AttachEvents` flow. First successful connect also needs manual `State = Connected` (transport's `StateChanged(Connected)` fires inside `ConnectAsync` before `AttachEvents` subscribes → event lost).
+- **Tray menu built once at construction**: tunnel items must be rebuilt in the menu `Opened` event via `RebuildTunnelItems`, else stuck at stale startup list. Menu structure fixed: `[Show main window, (tunnel items...), Separator, Exit]`.
+- **Settings take effect immediately**: `MainWindow` re-reads `settings.json` on `Closing`/`StateChanged` (CloseToTray/MinimizeToTray), no cache.
+- **`MainWindow.IsQuitting` static flag**: distinguishes real exit from minimize-to-tray. Tray "Exit" must set `IsQuitting = true` before `Application.Shutdown()`, else close-intercept turns exit into hide.
+- **UI thread marshalling**: non-UI-thread callbacks (e.g. transport `StateChanged`) must go through `DispatcherUI.Run` before touching bound properties.
+- **`SshServerProfile.Id` immutable**: `TunnelManager` dictionary key depends on it; `TunnelItemViewModel.ApplyProfile` copies field-by-field but preserves `Id`.
+- **`.gitignore`**: excludes `bin/`, `obj/`, `Debug/`, `Release/`, `*.log`, `logs/`, `*.user`, `.vs/`, `.idea/`, `*.nupkg`
 
 ### NStringTool
 

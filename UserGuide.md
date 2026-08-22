@@ -1,6 +1,6 @@
 # ElectronAppTool
 
-桌面工具集合，由八个独立子项目组成的 monorepo — 其中七个为 Electron 应用，一个为 .NET/WPF 应用。
+桌面工具集合，由九个独立子项目组成的 monorepo — 其中七个为 Electron 应用，两个为 .NET/WPF 应用，一个为 C++ 插件。
 
 > **注意**：这是 monorepo，**没有根目录 `package.json`**。每个子项目有独立的依赖、构建工具和运行脚本。请先 `cd` 到对应目录再执行命令。
 
@@ -25,6 +25,12 @@
 | 子项目 | 技术栈 | Win7 兼容 | 用途 |
 |--------|--------|-----------|------|
 | [CSNtpd](./CSNtpd/) | .NET 10 + WPF + xUnit | ❌ | NTP 时间同步工具 — NTP 客户端（向上游同步）+ NTP 服务端（局域网授时）、图形化设置、系统托盘、系统时间修正 |
+
+### .NET 工具（SSH 隧道代理）
+
+| 子项目 | 技术栈 | Win7 兼容 | 用途 |
+|--------|--------|-----------|------|
+| [CSSHTunnelProxy](./CSSHTunnelProxy/) | .NET 10 + WPF + SSH.NET + xUnit | ❌ | SSH 隧道代理工具 — 本地 SOCKS5/HTTP 代理经 SSH direct-tcpip 隧道转发、多隧道并行、断线重连、流量统计、DPAPI 加密、系统托盘 |
 
 ---
 
@@ -127,6 +133,20 @@ dotnet publish src/NtpTool.App -c Release -r win-x64 --self-contained \
 
 > 产物位于 `src/NtpTool.App/bin/Release/net10.0-windows/win-x64/publish/NtpTool.App.exe`。修改系统时间或监听 123 端口需管理员权限。详见 `CSNtpd/docs/USER_GUIDE.md`。
 
+### CSSHTunnelProxy
+
+```bash
+cd CSSHTunnelProxy
+dotnet build SSHTunnelProxy.slnx                       # 构建解决方案（App/Core/Tests）
+dotnet test                                            # 运行 xUnit 单元 + 集成测试
+dotnet run --project src/SSHTunnelProxy.App            # 启动 WPF 应用（开发调试）
+
+# 便携发布：自带 .NET 运行时，仅 win-x64，目标机无需安装 .NET
+dotnet publish src/SSHTunnelProxy.App -c Release -p:Portable=true
+```
+
+> 解决方案为 `slnx` 格式，需 .NET 10 SDK（10.0.300+）。便携式数据写在程序所在目录（`profiles.json`、`settings.json`、`logs.db`、`known_hosts.json`）。详见 `CSSHTunnelProxy/CLAUDE.md`。
+
 ---
 
 ## 命令说明
@@ -150,6 +170,10 @@ dotnet publish src/NtpTool.App -c Release -r win-x64 --self-contained \
 | `dotnet test NtpTool.slnx` | CSNtpd | 运行 xUnit 测试（Core.Tests + Infrastructure.Tests） |
 | `dotnet run --project src/NtpTool.App` | CSNtpd | 启动 WPF 应用 |
 | `dotnet publish ... --self-contained` | CSNtpd | 生成绿色单文件 exe（含运行时） |
+| `dotnet build SSHTunnelProxy.slnx` | CSSHTunnelProxy | 构建解决方案（App/Core/Tests） |
+| `dotnet test` | CSSHTunnelProxy | 运行 xUnit 单元 + 集成测试 |
+| `dotnet run --project src/SSHTunnelProxy.App` | CSSHTunnelProxy | 启动 WPF 应用 |
+| `dotnet publish ... -p:Portable=true` | CSSHTunnelProxy | 便携发布（自带 .NET 运行时） |
 
 ### dev 机制
 
@@ -274,6 +298,40 @@ tests/（xUnit 测试）
 - **配置**：`ntp-tool-config.json`（程序目录），图形化设置界面（Windows 11 风格，客户端/服务端/日志三页）
 - **限流与白名单**：服务端支持每 IP 每分钟限流、CIDR 白名单、请求日志记录
 
+### CSSHTunnelProxy 架构（.NET/WPF，独立于 Electron 体系）
+
+CSSHTunnelProxy 采用三层 + 依赖注入架构，与 CSNtpd 类似但面向 SSH 隧道代理：
+
+```
+SSHTunnelProxy.App（WPF 表现层，net10.0-windows）
+├── MVVM：MainViewModel / TunnelItemViewModel / ConfigViewModel / LogViewModel / SettingsViewModel（CommunityToolkit.Mvvm 源生成器）
+├── Views：MainWindow / ConfigDialog（XAML）
+├── Framework：TrayIconController（托盘）/ SerilogLoggerProvider（日志桥接）/ DispatcherUI（UI 调度）/ StartupRegistrar（开机自启）/ RangeObservableCollection
+├── Resources：Win11 Fluent 控件样式（Controls.xaml）
+└── 引用 Core
+
+SSHTunnelProxy.Core（核心业务层，net10.0，无 UI 依赖）
+├── Models：SshServerProfile / AppSettings / ProxyType / AuthMethod / TunnelState / ConnectionLog / TrafficEventArgs
+├── Services：TunnelManager（多隧道生命周期）/ ConfigService / LogService（SQLite 连接日志）/ ITunnelManager
+├── Proxy：Socks5ProxyServer / HttpProxyServer（协议解析与本地监听）/ Socks5Protocol / HttpParser / ProxyCredentialValidator
+├── Tunnel：SshTunnelTransport（SSH 会话 + 重连监控）/ SshDirectTcpipChannel（ForwardedPortLocal 临时端口）/ StreamRelay（双向透传）/ TrafficCounter
+├── Security：DpapiProtector（DPAPI 加密）/ HostKeyVerifier（TOFU 主机密钥校验）
+└── Utils：AccentColorProvider（系统强调色）/ StreamRelay
+
+SSHTunnelProxy.Tests（xUnit + Moq + FluentAssertions）
+├── Unit：Socks5Protocol / HttpParser / DpapiProtector / TrafficCounter / StreamRelay / ConfigService / AccentColorProvider
+├── Integration：Socks5EndToEnd / HttpProxyEndToEnd（FakeSshTunnelTransport 绕过真实 SSH）
+└── Helpers：FakeSshTunnelTransport / LocalFixture / CollectingSink
+```
+
+**关键设计**：
+- **自建协议解析层**：不使用 SSH.NET 的 `ForwardedPortDynamic`，而是自建 SOCKS5/HTTP 协议解析 + direct-tcpip Channel 转发。SOCKS5 与 HTTP 共用同一条 `SshTunnelTransport`，可精确统计每条连接的流量与目标地址，便于扩展规则分流与本地认证
+- **direct-tcpip 实现变通**：SSH.NET 2026 将低层 Channel API 设为 internal，故 `SshDirectTcpipChannel` 改用公开的 `ForwardedPortLocal`：绑定临时本地端口（`boundPort=0`），再用 `TcpClient` 连接获得双向 `Stream`，每条代理连接对应一个临时 `ForwardedPortLocal`
+- **断线重连**：`SshTunnelTransport` 后台 `MonitorLoopAsync` 每 2s 检查连接，断线触发 `TunnelManager.ReconnectLoopAsync`（指数退避 5→10→20→40→60 封顶，可无限重连）
+- **便携式数据**：所有运行时数据写在程序所在目录（`AppContext.BaseDirectory`，非 `%APPDATA%`），敏感字段用 DPAPI 加密（CurrentUser 作用域 + 附加熵），主机密钥 TOFU 信任
+- **HTTP 仅 CONNECT 隧道**：首期仅支持 CONNECT 隧道模式（覆盖 HTTPS），普通 GET/POST 转发不在范围
+- **UI**：Win11 Fluent 风格，浅色单主题，系统强调色运行时注入；侧边栏导航（隧道/日志/设置）
+
 ---
 
 ## 子项目详细介绍
@@ -380,6 +438,21 @@ electron/
 - **日志**：文件日志 + 滚动（按大小）+ 保留期清理，可选 UDP 详细日志
 
 **结构**：三层架构（App/Core/Infrastructure）+ 依赖注入（`CompositionRoot` 用 `Microsoft.Extensions.DependencyInjection`），MVVM 模式（`ObservableObject`/`RelayCommand` 基类）。详见 `CSNtpd/docs/USER_GUIDE.md` 和 `CSNtpd/docs/CSNtpd需求设计文档.md`。
+
+### CSSHTunnelProxy — SSH 隧道代理工具
+
+基于 .NET 10 + WPF + SSH.NET 的 SSH 隧道代理桌面工具，在本地启动 SOCKS5 与 HTTP 代理监听端口，所有经过代理的流量通过 SSH 加密隧道（direct-tcpip）转发到远程目标，面向 Windows 10/11（不支持 Win7）：
+
+- **双协议代理**：本地同时监听 SOCKS5（默认 1080）与 HTTP（默认 8118）代理端口，共用同一条 SSH 隧道
+- **多隧道并行**：可同时运行多个 SSH 隧道实例，独立启停
+- **断线自动重连**：`SshTunnelTransport` 后台监控循环，断线触发 `TunnelManager` 重连（指数退避 5→10→20→40→60 秒，可无限重连）
+- **流量统计**：实时上传/下载速率（5 秒滑动窗口）+ 累计字节 + 活跃连接数
+- **连接日志**：SQLite 记录每次代理连接的目标、时间、字节数（仅元数据，不含传输内容）
+- **认证**：SSH 密码 / 私钥（含 Passphrase）/ 键盘交互；代理层可选用户名密码认证
+- **安全存储**：密码、私钥 Passphrase 等敏感字段用 Windows DPAPI 加密；主机密钥 TOFU 信任
+- **系统托盘**：关闭/最小化收进托盘、双击托盘恢复窗口、托盘菜单快捷启停隧道、开机自启、启动即最小化、自动恢复连接
+
+**结构**：三层架构（App/Core/Tests）+ 依赖注入（`Microsoft.Extensions.DependencyInjection`），MVVM 用 `CommunityToolkit.Mvvm` 源生成器。Core 的 `Proxy/` 自建 SOCKS5/HTTP 协议解析层（非 SSH.NET 的 `ForwardedPortDynamic`），`Tunnel/SshDirectTcpipChannel` 用 `ForwardedPortLocal` 临时端口桥接（SSH.NET 2026 低层 Channel API 为 internal 的变通）。详见 `CSSHTunnelProxy/CLAUDE.md` 和 `CSSHTunnelProxy/README.md`。
 
 ### NStringTool — Notepad++ 字符串转义插件
 
@@ -521,12 +594,47 @@ NStringTool/
     └── NStringTool.dll            # 最终成果物（x64 PE32+）
 ```
 
+### .NET 项目（CSSHTunnelProxy）
+
+```
+CSSHTunnelProxy/
+├── SSHTunnelProxy.slnx              # 解决方案（.slnx 格式）
+├── docs/                            # 设计文档（需求设计 + 实现计划 + UI 设计）
+├── src/
+│   ├── SSHTunnelProxy.Core/         # 核心业务层（net10.0，无 UI 依赖）
+│   │   ├── Models/                  # SshServerProfile / AppSettings / ProxyType / AuthMethod / TunnelState / ConnectionLog
+│   │   ├── Services/                # TunnelManager（多隧道）/ ConfigService / LogService（SQLite）
+│   │   ├── Proxy/                   # Socks5ProxyServer / HttpProxyServer / Socks5Protocol / HttpParser
+│   │   ├── Tunnel/                  # SshTunnelTransport / SshDirectTcpipChannel / StreamRelay / TrafficCounter
+│   │   ├── Security/                # DpapiProtector（DPAPI）/ HostKeyVerifier（TOFU）
+│   │   └── Utils/                   # AccentColorProvider / StreamRelay
+│   ├── SSHTunnelProxy.App/          # WPF 表现层（net10.0-windows）
+│   │   ├── App.xaml(.cs)            # WPF 入口 + 依赖注入容器
+│   │   ├── Views/                   # MainWindow / ConfigDialog
+│   │   ├── ViewModels/              # Main / TunnelItem / Config / Log / Settings（CommunityToolkit.Mvvm）
+│   │   ├── Framework/               # TrayIconController / SerilogLoggerProvider / DispatcherUI / StartupRegistrar
+│   │   ├── Resources/               # Win11 Fluent 控件样式
+│   │   ├── Converters/             # UI 值转换器
+│   │   └── Assets/                  # 图标
+│   └── SSHTunnelProxy.Tests/        # xUnit + Moq + FluentAssertions
+│       ├── Unit/                    # Socks5Protocol / HttpParser / DpapiProtector / TrafficCounter / StreamRelay 等
+│       ├── Integration/             # Socks5EndToEnd / HttpProxyEndToEnd（FakeSshTunnelTransport 绕过真实 SSH）
+│       └── Helpers/                 # FakeSshTunnelTransport / LocalFixture / CollectingSink
+└── 便携式数据（程序目录，非 %APPDATA%）
+    ├── profiles.json                # 服务器配置（DPAPI 加密敏感字段）
+    ├── settings.json                # 全局设置
+    ├── logs.db                      # SQLite 连接日志
+    ├── known_hosts.json             # TOFU 主机密钥
+    └── logs/app-.log                # Serilog 按天滚动
+```
+
 ---
 
 ## 开发说明
 
 - 修改共享工具配置（vite config、electron-builder、dev 启动脚本）时，**EHttpServerTool、EWebsocketTool 和 ERabbitMQTool** 脚手架几乎一致，通常三处需同步更新。EWebsocketMan 配置独立。
 - **CSNtpd** 是唯一的 .NET 项目，使用 `dotnet` CLI 而非 npm，构建/测试/运行命令独立，与 Electron 项目无共享配置。修改时注意三层（App/Core/Infrastructure）的依赖方向：App → Core + Infrastructure，Infrastructure → Core，测试项目引用对应被测层。
+- **CSSHTunnelProxy** 同为 .NET 项目（.NET 10 + WPF + SSH.NET），使用 `dotnet` CLI。三层（App/Core/Tests），依赖单向 `App → Core`、`Tests → Core`。便携式数据写在程序所在目录（非 `%APPDATA%`），敏感字段用 DPAPI 加密（绑定当前 Windows 用户，跨机器不可迁移）。注意 `TunnelItemViewModel` 重启需走「停止旧上下文 → StartTunnelAsync → AttachEvents」流程，不能直接调 `RestartTunnelAsync`（事件订阅会丢失）。
 - **NStringTool** 是唯一的 C++ 项目，使用 CMake + Visual Studio 构建，产物为 DLL（非可执行）。VS 2015 默认生成器是 Win32，必须用 `Win64` 变体或 `-A x64` 指定 64 位，否则 Win32 DLL 无法加载到 64 位 Notepad++。
 - 设计文档和决策记录位于各子项目的 `docs/`、`docs/superpowers/` 和 `.superpowers/sdd/` 目录，供追溯历史决策。
 
