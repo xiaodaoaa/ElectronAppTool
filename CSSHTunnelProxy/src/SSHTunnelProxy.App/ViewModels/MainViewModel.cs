@@ -5,6 +5,7 @@ using SSHTunnelProxy.App.Framework;
 using SSHTunnelProxy.Core.Models;
 using SSHTunnelProxy.Core.Services;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -139,7 +140,8 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>删除指定隧道：确认后先断开运行中连接，再从列表移除并持久化。</summary>
+    /// <summary>删除指定隧道：确认后从列表移除并持久化。
+    /// 运行态（已连接/连接中/重连中）时按钮已禁用，需先断开再删除。</summary>
     [RelayCommand(AllowConcurrentExecutions = false)]
     private async Task DeleteTunnelAsync(TunnelItemViewModel? tunnel)
     {
@@ -152,10 +154,6 @@ public partial class MainViewModel : ObservableObject
         if (answer != MessageBoxResult.Yes)
             return;
 
-        // 运行中（含连接中/重连中）先断开，复用现有 StopAsync 逻辑。
-        if (tunnel.State is TunnelState.Connected or TunnelState.Connecting or TunnelState.Reconnecting)
-            await tunnel.StopCommand.ExecuteAsync(null);
-
         Tunnels.Remove(tunnel);
 
         // 被删的若是当前选中项，回退到首项（空则为 null），避免详情面板悬空。
@@ -165,38 +163,58 @@ public partial class MainViewModel : ObservableObject
         await PersistProfilesAsync();
     }
 
-    private bool CanDeleteTunnel(TunnelItemViewModel? tunnel) => tunnel is not null;
+    /// <summary>隧道是否处于运行态——运行态禁止编辑与删除，需先断开。</summary>
+    private static bool IsRunning(TunnelState state)
+        => state is TunnelState.Connected or TunnelState.Connecting or TunnelState.Reconnecting;
 
-    /// <summary>编辑指定隧道：先断开运行中连接，复用对话框编辑模式，应用新配置并持久化。</summary>
+    private bool CanDeleteTunnel(TunnelItemViewModel? tunnel)
+        => tunnel is not null && !IsRunning(tunnel.State);
+
+    /// <summary>编辑指定隧道：复用对话框编辑模式，应用新配置并持久化。
+    /// 运行态（已连接/连接中/重连中）时按钮已禁用，需先断开再编辑——
+    /// 避免配置半更新竞争，且新端口/凭据需重启才生效。</summary>
     [RelayCommand(AllowConcurrentExecutions = false)]
     private async Task EditTunnelAsync(TunnelItemViewModel? tunnel)
     {
         if (tunnel is null)
             return;
 
-        var wasRunning = tunnel.State is TunnelState.Connected
-            or TunnelState.Connecting or TunnelState.Reconnecting;
-
-        // 先断开运行中隧道再编辑：避免配置半更新竞争，且新端口/凭据需重启才生效。
-        if (wasRunning)
-            await tunnel.StopCommand.ExecuteAsync(null);
-
         // 复用 ConfigDialog 编辑模式：传 tunnel.Profile 即编辑现有配置。
         var dialog = new Views.ConfigDialog(_services, tunnel.Profile);
         if (dialog.ShowDialog() != true || dialog.Result is not SshServerProfile profile)
-            return; // 取消：隧道已断开（若 wasRunning），配置未变。
+            return; // 取消：配置未变。
 
         tunnel.ApplyProfile(profile);
         await PersistProfilesAsync();
     }
 
-    private bool CanEditTunnel(TunnelItemViewModel? tunnel) => tunnel is not null;
+    private bool CanEditTunnel(TunnelItemViewModel? tunnel)
+        => tunnel is not null && !IsRunning(tunnel.State);
 
-    /// <summary>选中项变化时刷新删除/编辑命令的可用性。</summary>
+    /// <summary>选中项变化时刷新删除/编辑命令的可用性，并切换属性变更订阅。</summary>
     partial void OnSelectedTunnelChanged(TunnelItemViewModel? value)
     {
+        // 退订旧选中项的属性变更监听。
+        if (value is not null)
+            value.PropertyChanged -= OnSelectedTunnelPropertyChanged;
+
+        // 订阅新选中项：隧道 State 变化时刷新删除/编辑按钮可用性。
+        if (SelectedTunnel is not null)
+            SelectedTunnel.PropertyChanged += OnSelectedTunnelPropertyChanged;
+
         DeleteTunnelCommand.NotifyCanExecuteChanged();
         EditTunnelCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>选中隧道状态变化时刷新删除/编辑命令可用性——
+    /// 运行态（已连接/连接中/重连中）禁用编辑与删除，需先断开。</summary>
+    private void OnSelectedTunnelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TunnelItemViewModel.State))
+        {
+            DeleteTunnelCommand.NotifyCanExecuteChanged();
+            EditTunnelCommand.NotifyCanExecuteChanged();
+        }
     }
 
     [RelayCommand]
