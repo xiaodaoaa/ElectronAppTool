@@ -65,6 +65,9 @@ public partial class TunnelItemViewModel : ObservableObject
     }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
     private TunnelState _state;
 
     [ObservableProperty]
@@ -87,8 +90,15 @@ public partial class TunnelItemViewModel : ObservableObject
 
     private DateTime _connectedAtUtc;
 
+    /// <summary>连接按钮可用：仅未连接或错误状态可发起连接。</summary>
+    private bool CanStart => State is TunnelState.Disconnected or TunnelState.Error;
+
+    /// <summary>断开/重连按钮可用：已连接、连接中或重连中才允许操作。</summary>
+    private bool CanStop => State is TunnelState.Connected
+        or TunnelState.Connecting or TunnelState.Reconnecting;
+
     /// <summary>启动隧道。</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
         try
@@ -119,7 +129,7 @@ public partial class TunnelItemViewModel : ObservableObject
     }
 
     /// <summary>停止隧道。</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStop))]
     private async Task StopAsync()
     {
         try
@@ -135,7 +145,7 @@ public partial class TunnelItemViewModel : ObservableObject
     }
 
     /// <summary>重启隧道。</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStop))]
     private async Task RestartAsync()
     {
         try
