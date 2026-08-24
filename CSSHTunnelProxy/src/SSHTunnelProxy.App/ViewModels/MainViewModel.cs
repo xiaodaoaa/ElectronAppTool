@@ -142,7 +142,7 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>删除指定隧道：确认后从列表移除并持久化。
     /// 运行态（已连接/连接中/重连中）时按钮已禁用，需先断开再删除。</summary>
-    [RelayCommand(AllowConcurrentExecutions = false)]
+    [RelayCommand(AllowConcurrentExecutions = false, CanExecute = nameof(CanDeleteTunnel))]
     private async Task DeleteTunnelAsync(TunnelItemViewModel? tunnel)
     {
         if (tunnel is null)
@@ -167,13 +167,13 @@ public partial class MainViewModel : ObservableObject
     private static bool IsRunning(TunnelState state)
         => state is TunnelState.Connected or TunnelState.Connecting or TunnelState.Reconnecting;
 
-    private bool CanDeleteTunnel(TunnelItemViewModel? tunnel)
-        => tunnel is not null && !IsRunning(tunnel.State);
+    private bool CanDeleteTunnel()
+        => SelectedTunnel is not null && !IsRunning(SelectedTunnel.State);
 
     /// <summary>编辑指定隧道：复用对话框编辑模式，应用新配置并持久化。
     /// 运行态（已连接/连接中/重连中）时按钮已禁用，需先断开再编辑——
     /// 避免配置半更新竞争，且新端口/凭据需重启才生效。</summary>
-    [RelayCommand(AllowConcurrentExecutions = false)]
+    [RelayCommand(AllowConcurrentExecutions = false, CanExecute = nameof(CanEditTunnel))]
     private async Task EditTunnelAsync(TunnelItemViewModel? tunnel)
     {
         if (tunnel is null)
@@ -188,8 +188,8 @@ public partial class MainViewModel : ObservableObject
         await PersistProfilesAsync();
     }
 
-    private bool CanEditTunnel(TunnelItemViewModel? tunnel)
-        => tunnel is not null && !IsRunning(tunnel.State);
+    private bool CanEditTunnel()
+        => SelectedTunnel is not null && !IsRunning(SelectedTunnel.State);
 
     /// <summary>选中项变化时刷新删除/编辑命令的可用性，并切换属性变更订阅。</summary>
     partial void OnSelectedTunnelChanged(TunnelItemViewModel? value)
