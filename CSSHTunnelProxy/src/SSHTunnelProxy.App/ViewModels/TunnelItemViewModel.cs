@@ -200,7 +200,9 @@ public partial class TunnelItemViewModel : ObservableObject
         if (State == TunnelState.Connected)
         {
             var elapsed = DateTime.UtcNow - _connectedAtUtc;
-            UptimeText = $"{elapsed.Hours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+            UptimeText = elapsed.Days > 0
+                ? $"{elapsed.Days}天 {elapsed.Hours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}"
+                : $"{elapsed.Hours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
         }
     }
 }

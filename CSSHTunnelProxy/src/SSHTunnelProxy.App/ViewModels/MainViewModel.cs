@@ -214,9 +214,12 @@ public partial class MainViewModel : ObservableObject
 
     private void RefreshTraffic()
     {
+        // 所有隧道（含当前选中项）统一刷新一次即可。
+        // 不能再单独调 SelectedTunnel.Tick()：Tick() 内部调用 counter.Sample()，
+        // 该方法每次调用都会推进并清零一个采样桶。对选中项二次调用等于每秒清掉
+        // 两个桶，稳态下窗口仅剩约 2/5 有效数据，显示速率被系统性压低到实际的 ~40%。
         foreach (var t in Tunnels)
             t.Tick();
-        SelectedTunnel?.Tick();
         var connected = Tunnels.Count(t => t.State == Core.Models.TunnelState.Connected);
         ConnectedCountText = connected > 0 ? $"{connected} 个已连接" : "无";
     }

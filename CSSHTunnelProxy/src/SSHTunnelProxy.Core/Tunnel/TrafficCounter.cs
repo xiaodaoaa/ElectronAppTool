@@ -16,7 +16,6 @@ public class TrafficCounter
     private readonly long[] _uploadSamples = new long[SampleCount];
     private readonly long[] _downloadSamples = new long[SampleCount];
     private int _sampleIndex;
-    private DateTime _lastSampleUtc = DateTime.UtcNow;
 
     private const int SampleCount = 5; // 最近 5 秒
 
@@ -64,27 +63,27 @@ public class TrafficCounter
         }
     }
 
-    /// <summary>滚动速率窗口：返回当前采样秒内累加的字节统计，并更新采样基线。</summary>
+    /// <summary>
+    /// 滚动速率窗口：返回近 <see cref="SampleCount"/> 个采样周期的平均速率，并滚动采样桶。
+    /// 先对当前窗口求和（含正在累积的当前桶），再推进并清零最老桶，
+    /// 使稳态下每个桶各含一个完整周期的数据，避免系统性低估。
+    /// </summary>
     public (double UploadBytesPerSec, double DownloadBytesPerSec) Sample()
     {
         lock (_lock)
         {
-            var now = DateTime.UtcNow;
-            var elapsed = (now - _lastSampleUtc).TotalSeconds;
-            _lastSampleUtc = now;
-
-            // 推进采样桶。
-            _sampleIndex = (_sampleIndex + 1) % SampleCount;
-            _uploadSamples[_sampleIndex] = 0;
-            _downloadSamples[_sampleIndex] = 0;
-
             long up = 0, down = 0;
             foreach (var s in _uploadSamples)
                 up += s;
             foreach (var s in _downloadSamples)
                 down += s;
 
-            var windowSec = Math.Max(SampleCount, elapsed);
+            // 推进到下一桶并清零最老桶，供下一周期累积。
+            _sampleIndex = (_sampleIndex + 1) % SampleCount;
+            _uploadSamples[_sampleIndex] = 0;
+            _downloadSamples[_sampleIndex] = 0;
+
+            var windowSec = (double)SampleCount;
             return (up / windowSec, down / windowSec);
         }
     }
