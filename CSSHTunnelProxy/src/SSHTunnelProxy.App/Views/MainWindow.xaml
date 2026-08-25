@@ -94,6 +94,7 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="时间" Binding="{Binding Timestamp, StringFormat='yyyy-MM-dd HH:mm:ss'}" Width="150" />
                             <DataGridTextColumn Header="隧道" Binding="{Binding TunnelName}" Width="1*" />
+                            <DataGridTextColumn Header="协议" Binding="{Binding ProxyType}" Width="80" />
                             <DataGridTextColumn Header="客户端" Binding="{Binding ClientEndpoint}" Width="1.2*" />
                             <DataGridTextColumn Header="目标" Binding="{Binding TargetEndpoint}" Width="1.2*" />
                             <DataGridTextColumn Header="上传" Binding="{Binding BytesSent, Converter={StaticResource BytesToText}}" Width="80" />
