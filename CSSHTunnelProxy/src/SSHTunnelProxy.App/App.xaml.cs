@@ -8,6 +8,7 @@ using SSHTunnelProxy.Core;
 using SSHTunnelProxy.Core.Services;
 using SSHTunnelProxy.Core.Utils;
 using System.IO;
+using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 
@@ -18,6 +19,16 @@ namespace SSHTunnelProxy.App;
 /// </summary>
 public partial class App : Application
 {
+    private static readonly Guid AppGuid = Guid.Parse("7A2C4E8B-1D3F-4A9B-8C5E-6F0D2B7A4C9E");
+    private static readonly string MutexName = $"SSHTunnelProxy-{AppGuid:N}";
+    /// <summary>跨进程事件名：第二个实例通知首个实例"显示主窗口"。</summary>
+    private static readonly string ShowEventName = $"SSHTunnelProxy-Show-{AppGuid:N}";
+
+    private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _showEvent;
+    private RegisteredWaitHandle? _showRegistration;
+    private volatile bool _shuttingDown;
+
     private ServiceProvider? _services;
 
     public static new App Current => (App)Application.Current;
@@ -27,6 +38,12 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // 单实例检查：若已有实例在运行，激活其主窗口后退出本实例。
+        if (!TryAcquireSingleInstance())
+        {
+            return;
+        }
+
         base.OnStartup(e);
         ConfigureSerilog();
 
@@ -73,6 +90,17 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _shuttingDown = true;
+
+        // 注销显示信号回调并释放命名事件。
+        if (_showRegistration is not null)
+        {
+            _showRegistration.Unregister(null);
+            _showRegistration = null;
+        }
+        _showEvent?.Dispose();
+        _showEvent = null;
+
         // 退出时记录仍处于已连接状态的隧道，下次启动自动恢复连接。
         PersistLastConnectedTunnels();
 
@@ -80,7 +108,81 @@ public partial class App : Application
         tray?.Dispose();
         Log.Information("应用退出");
         Log.CloseAndFlush();
+
+        _singleInstanceMutex?.Dispose();
+        _singleInstanceMutex = null;
+
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// 尝试获取单实例互斥锁。返回 true 表示当前实例是首个实例，可继续启动；
+    /// 返回 false 表示已有实例在运行，已通知其显示主窗口并准备退出本实例。
+    /// </summary>
+    /// <remarks>
+    /// 不使用 FindWindow 按标题查找窗口——隐藏在托盘的主窗口查找不可靠
+    /// （有时找不到、有时误匹配 Explorer 文件夹窗口标题）。改用命名事件：
+    /// 首个实例创建事件并注册回调，第二个实例 Set 事件通知首个实例自行显示窗口。
+    /// </remarks>
+    private bool TryAcquireSingleInstance()
+    {
+        if (!AcquireMutex())
+        {
+            // 已有实例在运行：通知其显示主窗口，然后退出本实例。
+            NotifyExistingInstance();
+            Shutdown();
+            return false;
+        }
+
+        // 首个实例：创建命名事件，注册回调。第二个实例 Set 此事件时回调在
+        // 线程池线程触发，封送到 UI 线程后从托盘恢复并前置主窗口。
+        _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        _showRegistration = ThreadPool.RegisterWaitForSingleObject(
+            _showEvent, OnShowSignal, state: null, Timeout.InfiniteTimeSpan, executeOnlyOnce: false);
+        return true;
+    }
+
+    private bool AcquireMutex()
+    {
+        try
+        {
+            _singleInstanceMutex = new Mutex(initiallyOwned: false, MutexName, out var isNew);
+            return isNew;
+        }
+        catch (AbandonedMutexException)
+        {
+            // 前一个实例异常终止遗留了互斥锁，本实例直接接管。
+            _singleInstanceMutex = new Mutex(initiallyOwned: false, MutexName, out _);
+            return true;
+        }
+    }
+
+    /// <summary>通知已有实例显示主窗口：打开同名事件并 Set。</summary>
+    private static void NotifyExistingInstance()
+    {
+        try
+        {
+            var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+            showEvent.Set();
+            showEvent.Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"通知已有实例失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>命名事件的回调（线程池线程触发）：封送到 UI 线程，从托盘恢复并前置主窗口。</summary>
+    private void OnShowSignal(object? state, bool timedOut)
+    {
+        if (_shuttingDown)
+            return;
+
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            if (Application.Current?.MainWindow is Views.MainWindow w)
+                w.ShowFromTray();
+        });
     }
 
     /// <summary>
