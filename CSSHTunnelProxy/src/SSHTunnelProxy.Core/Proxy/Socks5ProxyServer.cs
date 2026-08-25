@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SSHTunnelProxy.Core.Models;
 using SSHTunnelProxy.Core.Tunnel;
 using SSHTunnelProxy.Core.Utils;
@@ -15,6 +16,7 @@ public sealed class Socks5ProxyServer : IProxyServer
 {
     private readonly ProxyServerOptions _options;
     private readonly ISshTunnelTransport _transport;
+    private readonly ILogger? _logger;
 
     private TcpListener? _listener;
     private readonly CancellationTokenSource _cts = new();
@@ -25,6 +27,7 @@ public sealed class Socks5ProxyServer : IProxyServer
     {
         _transport = transport;
         _options = options;
+        _logger = options.Logger;
     }
 
     public ProxyType Type => ProxyType.Socks5;
@@ -42,6 +45,7 @@ public sealed class Socks5ProxyServer : IProxyServer
         BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _running = true;
 
+        _logger?.LogInformation("SOCKS5 代理监听已启动 {Tunnel} @{Address}:{Port}", _options.TunnelName, _options.ListenAddress, BoundPort);
         _ = AcceptLoopAsync();
         await Task.CompletedTask;
     }
@@ -61,6 +65,7 @@ public sealed class Socks5ProxyServer : IProxyServer
             await Task.Delay(50);
 
         _listener = null;
+        _logger?.LogInformation("SOCKS5 代理监听已停止 {Tunnel}", _options.TunnelName);
     }
 
     private async Task AcceptLoopAsync()
@@ -103,7 +108,9 @@ public sealed class Socks5ProxyServer : IProxyServer
         }
         catch (Exception ex)
         {
-            log.Status = ex is EndOfStreamException ? "Failed" : "Failed";
+            log.Status = "Failed";
+            _logger?.LogWarning(ex, "SOCKS5 连接处理失败 {Tunnel} 客户端 {Client} 目标 {Target}",
+                _options.TunnelName, log.ClientEndpoint, log.TargetEndpoint);
         }
         finally
         {
@@ -118,8 +125,16 @@ public sealed class Socks5ProxyServer : IProxyServer
             var sink = _options.ConnectionSink;
             if (sink is not null)
             {
-                try { await sink.RecordConnectionAsync(log); } catch { /* 日志失败不影响主流程 */ }
+                try { await sink.RecordConnectionAsync(log); }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "回写连接日志失败 {Tunnel}", _options.TunnelName);
+                }
             }
+
+            _logger?.LogDebug("SOCKS5 连接结束 {Tunnel} {Client}→{Target} 上传 {Up} 下载 {Down} 时长 {Duration}ms 状态 {Status}",
+                _options.TunnelName, log.ClientEndpoint, log.TargetEndpoint,
+                log.BytesSent, log.BytesReceived, (long)log.Duration.TotalMilliseconds, log.Status);
 
             client.Dispose();
             Interlocked.Decrement(ref _activeClients);
@@ -137,6 +152,7 @@ public sealed class Socks5ProxyServer : IProxyServer
         if (!noAuth && !useAuth)
         {
             await clientStream.WriteAsync(Socks5Protocol.BuildHandshakeReply(Socks5Protocol.MethodNoAcceptable));
+            _logger?.LogWarning("SOCKS5 握手失败：无可接受认证方法 {Tunnel} 客户端 {Client}", _options.TunnelName, log.ClientEndpoint);
             throw new SocksProtocolException("无可接受的认证方法。");
         }
 
@@ -150,7 +166,10 @@ public sealed class Socks5ProxyServer : IProxyServer
             var ok = _options.CredentialValidator?.Validate(auth.Username, auth.Password) == true;
             await clientStream.WriteAsync(Socks5Protocol.BuildAuthReply(ok));
             if (!ok)
+            {
+                _logger?.LogWarning("SOCKS5 代理认证失败 {Tunnel} 用户 {User}", _options.TunnelName, auth.Username);
                 throw new SocksProtocolException("代理认证失败。");
+            }
         }
 
         // ③ CONNECT 请求
@@ -159,6 +178,7 @@ public sealed class Socks5ProxyServer : IProxyServer
         {
             await clientStream.WriteAsync(
                 Socks5Protocol.BuildConnectReply(Socks5Protocol.ReplyCommandNotSupported));
+            _logger?.LogWarning("SOCKS5 不支持的命令 0x{Cmd:X2} {Tunnel} 客户端 {Client}", request.Command, _options.TunnelName, log.ClientEndpoint);
             throw new SocksProtocolException($"不支持的 SOCKS5 命令：0x{request.Command:X2}");
         }
 
@@ -168,6 +188,7 @@ public sealed class Socks5ProxyServer : IProxyServer
         {
             await clientStream.WriteAsync(
                 Socks5Protocol.BuildConnectReply(Socks5Protocol.ReplyGeneralFailure));
+            _logger?.LogWarning("SOCKS5 建连时隧道未连接 {Tunnel} 目标 {Target}", _options.TunnelName, log.TargetEndpoint);
             throw new IOException("SSH 隧道未连接。");
         }
 
@@ -185,7 +206,7 @@ public sealed class Socks5ProxyServer : IProxyServer
         }
 
         // ⑤ 双向透传
-        var relay = await StreamRelay.RelayAsync(clientStream, channel, _options.Traffic, _cts.Token);
+        var relay = await StreamRelay.RelayAsync(clientStream, channel, _options.Traffic, _cts.Token, _logger);
         log.BytesSent = relay.BytesUpstream;
         log.BytesReceived = relay.BytesDownstream;
         return channel;

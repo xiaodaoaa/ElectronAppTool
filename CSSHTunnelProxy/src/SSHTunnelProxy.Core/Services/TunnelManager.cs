@@ -32,7 +32,6 @@ public sealed class TunnelManager : ITunnelManager
         _logger = logger;
         _transportFactory = transportFactory ?? DefaultTransportFactory;
     }
-
     public event EventHandler<TunnelEventArgs>? TunnelStateChanged;
 
     public IReadOnlyCollection<TunnelContext> GetActiveTunnels()
@@ -42,6 +41,9 @@ public sealed class TunnelManager : ITunnelManager
 
     public async Task<TunnelContext> StartTunnelAsync(SshServerProfile profile)
     {
+        _logger.LogInformation("启动隧道 {Tunnel}（{Host}:{Port}，认证 {Auth}）",
+            profile.Name, profile.Host, profile.Port, profile.AuthMethod);
+
         var (transport, auth) = _transportFactory(_hostKeyVerifier, _protector, _connectionSink, profile);
 
         var traffic = new TrafficCounter();
@@ -53,6 +55,7 @@ public sealed class TunnelManager : ITunnelManager
             CredentialValidator = auth,
             ConnectionSink = _connectionSink,
             Traffic = traffic,
+            Logger = _logger,
         };
 
         var socks5 = new Socks5ProxyServer(transport, commonOptions with { ListenPort = profile.Socks5ListenPort });
@@ -93,6 +96,7 @@ public sealed class TunnelManager : ITunnelManager
         if (!_tunnels.TryGetValue(tunnelId, out var context))
             return;
 
+        _logger.LogInformation("停止隧道 {Tunnel}", context.Profile.Name);
         _tunnels.TryRemove(tunnelId, out _);
         RaiseState(tunnelId, context.Profile, TunnelState.Disconnected);
         await context.DisposeAsync();
@@ -163,14 +167,14 @@ public sealed class TunnelManager : ITunnelManager
     private void RaiseState(Guid id, SshServerProfile? profile, TunnelState state, string? message = null)
         => TunnelStateChanged?.Invoke(this, new TunnelEventArgs(id, profile) { State = state });
 
-    private static (ISshTunnelTransport, IProxyCredentialValidator?) DefaultTransportFactory(
+    private (ISshTunnelTransport, IProxyCredentialValidator?) DefaultTransportFactory(
         IHostKeyVerifier verifier, IDpapiProtector protector, IConnectionSink sink, SshServerProfile profile)
     {
         IProxyCredentialValidator? auth = null;
         if (profile.EnableProxyAuth)
             auth = new ProxyCredentialValidator(profile.ProxyUsername, protector.Decrypt(profile.EncryptedProxyPassword));
 
-        var transport = new SshTunnelTransport(profile, verifier, protector);
+        var transport = new SshTunnelTransport(profile, verifier, protector, _logger);
         return (transport, auth);
     }
 }

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace SSHTunnelProxy.Core.Proxy;
 
 /// <summary>
@@ -25,4 +27,8 @@ public sealed record ProxyServerOptions
 
     /// <summary>流量计数器（可为 null）。</summary>
     public Tunnel.TrafficCounter? Traffic { get; init; }
+
+    /// <summary>运行日志器（可为 null，测试场景可不注入）。</summary>
+    public ILogger? Logger { get; init; }
 }
+

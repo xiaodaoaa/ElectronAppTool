@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SSHTunnelProxy.Core.Models;
 using SSHTunnelProxy.Core.Security;
 using System.Text.Json;
@@ -13,6 +14,7 @@ public sealed class ConfigService : IConfigService
 {
     private readonly string _basePath;
     private readonly IDpapiProtector _protector;
+    private readonly ILogger<ConfigService> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -20,14 +22,15 @@ public sealed class ConfigService : IConfigService
         Converters = { new JsonStringEnumConverter() },
     };
 
-    public ConfigService(IDpapiProtector protector)
-        : this(protector, GetDefaultBasePath())
+    public ConfigService(IDpapiProtector protector, ILogger<ConfigService> logger)
+        : this(protector, logger, GetDefaultBasePath())
     {
     }
 
-    public ConfigService(IDpapiProtector protector, string basePath)
+    public ConfigService(IDpapiProtector protector, ILogger<ConfigService> logger, string basePath)
     {
         _protector = protector;
+        _logger = logger;
         _basePath = basePath;
     }
 
@@ -45,9 +48,10 @@ public sealed class ConfigService : IConfigService
             var items = JsonSerializer.Deserialize<PersistedProfiles>(json, JsonOptions);
             return items?.Profiles ?? new List<SshServerProfile>();
         }
-        catch
+        catch (Exception ex)
         {
             // 配置损坏时返回空，避免崩溃。
+            _logger.LogWarning(ex, "加载服务器配置失败，返回空列表 {Path}", ProfilesPath);
             return new List<SshServerProfile>();
         }
     }
@@ -58,6 +62,7 @@ public sealed class ConfigService : IConfigService
         var payload = new PersistedProfiles { Profiles = profiles.ToList() };
         var json = JsonSerializer.Serialize(payload, JsonOptions);
         await File.WriteAllTextAsync(ProfilesPath, json).ConfigureAwait(false);
+        _logger.LogInformation("已保存 {Count} 个服务器配置", profiles.Count);
     }
 
     public async Task<AppSettings> LoadSettingsAsync()
@@ -70,8 +75,9 @@ public sealed class ConfigService : IConfigService
             var json = await File.ReadAllTextAsync(SettingsPath).ConfigureAwait(false);
             return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "加载全局设置失败，返回默认值 {Path}", SettingsPath);
             return new AppSettings();
         }
     }
@@ -81,6 +87,7 @@ public sealed class ConfigService : IConfigService
         EnsureDirectory();
         var json = JsonSerializer.Serialize(settings, JsonOptions);
         await File.WriteAllTextAsync(SettingsPath, json).ConfigureAwait(false);
+        _logger.LogInformation("已保存全局设置");
     }
 
     private void EnsureDirectory()

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SSHTunnelProxy.Core.Tunnel;
 
 namespace SSHTunnelProxy.Core.Utils;
@@ -16,17 +17,19 @@ public static class StreamRelay
     /// <param name="target">隧道目标流</param>
     /// <param name="counter">流量计数（可为 null）</param>
     /// <param name="cancellationToken">取消令牌</param>
+    /// <param name="logger">运行日志器（可为 null）</param>
     /// <returns>各方向透传的字节数，供连接日志记录。</returns>
     public static async Task<StreamRelayResult> RelayAsync(
         Stream client,
         Stream target,
         TrafficCounter? counter,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILogger? logger = null)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        var upstream = CopyAsync(client, target, isClientToTarget: true, counter, linkedCts.Token);
-        var downstream = CopyAsync(target, client, isClientToTarget: false, counter, linkedCts.Token);
+        var upstream = CopyAsync(client, target, isClientToTarget: true, counter, linkedCts.Token, logger);
+        var downstream = CopyAsync(target, client, isClientToTarget: false, counter, linkedCts.Token, logger);
 
         // 任一侧结束（EOF 或取消）即取消另一侧。
         await Task.WhenAny(upstream, downstream);
@@ -43,7 +46,8 @@ public static class StreamRelay
         Stream destination,
         bool isClientToTarget,
         TrafficCounter? counter,
-        CancellationToken token)
+        CancellationToken token,
+        ILogger? logger)
     {
         var buffer = new byte[BufferSize];
         long total = 0;
@@ -71,13 +75,15 @@ public static class StreamRelay
         {
             // 正常取消。
         }
-        catch (IOException)
+        catch (IOException ex)
         {
             // 一方断开。
+            logger?.LogDebug(ex, "流透传 IO 异常（{Dir}）", isClientToTarget ? "上行" : "下行");
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
             // 流已释放。
+            logger?.LogDebug(ex, "流透传对象已释放（{Dir}）", isClientToTarget ? "上行" : "下行");
         }
 
         return total;

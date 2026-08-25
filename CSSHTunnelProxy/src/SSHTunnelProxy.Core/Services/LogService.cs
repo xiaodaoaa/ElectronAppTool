@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using SSHTunnelProxy.Core.Models;
 using SSHTunnelProxy.Core.Proxy;
 
@@ -12,9 +13,11 @@ public sealed class LogService : ILogService, IConnectionSink
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly ILogger<LogService>? _logger;
 
-    public LogService(string? databasePath = null)
+    public LogService(ILogger<LogService>? logger = null, string? databasePath = null)
     {
+        _logger = logger;
         databasePath ??= GetDefaultDbPath();
         var dir = Path.GetDirectoryName(databasePath);
         if (!string.IsNullOrEmpty(dir))
@@ -162,7 +165,12 @@ public sealed class LogService : ILogService, IConnectionSink
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "DELETE FROM connection_logs WHERE Timestamp < $cutoff";
             cmd.Parameters.AddWithValue("$cutoff", cutoff);
-            await cmd.ExecuteNonQueryAsync();
+            var affected = await cmd.ExecuteNonQueryAsync();
+            _logger?.LogInformation("清理 {Days} 天前连接日志，删除 {Count} 条", retainDays, affected);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "清理连接日志失败");
         }
         finally
         {

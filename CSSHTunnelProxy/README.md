@@ -89,6 +89,16 @@ src/
 > **关键设计**：不使用 SSH.NET 的 `ForwardedPortDynamic`，而是自建协议解析层 + direct-tcpip Channel 转发。理由：SOCKS5 与 HTTP 共用同一条隧道，可精确统计每条连接的流量与目标地址，便于扩展规则分流与本地认证。
 >
 > SSH.NET 2026 将 direct-tcpip 低层 Channel API 设为 internal，故 `SshDirectTcpipChannel` 改用公开的 `ForwardedPortLocal` 实现：绑定临时本地端口（`boundPort=0`），再用 `TcpClient` 连接该端口获得双向流。
+>
+> **每条代理连接资源开销**（详见 `SshDirectTcpipChannel` / `StreamRelay`）：
+>
+> | 资源 | 每连接消耗 |
+> |------|-----------|
+> | 临时端口 | 1 个（Windows 可用 ~16,384） |
+> | SSH.NET ForwardedPortLocal | 1 个 |
+> | 本地桥接 TcpClient | 1 个（回环回连） |
+> | 流缓冲区 | 80KB × 2 方向 = 160KB |
+> | 合计内存 | ~225KB |
 
 ## 数据存储
 
@@ -103,6 +113,18 @@ src/
 | 应用日志 | `logs/app-.log` | Serilog 按天滚动 |
 
 > DPAPI 加密的数据绑定当前 Windows 用户，跨机器不可迁移。
+
+## 性能与资源
+
+| 指标 | 数值 |
+|------|------|
+| 并发连接（200 目标） | 内存 ~45MB，完全在安全区 |
+| 单连接内存开销 | ~225KB（含双向 80KB 缓冲） |
+| 临时端口上限 | ~16,384（Windows 默认范围 49152-65535） |
+| 连接日志写入 | SQLite 串行写入，~50 conn/s 无瓶颈 |
+| 流量统计 | 5 秒滑动窗口（5 桶），每方向每读加锁 |
+| 重连退避 | 5→10→20→40→60 秒，`-1` 无限 |
+| 单连接吞吐 | 受 SSH 加密算法 + 网络带宽限制（硬件 AES 加速可达 Gbps 级） |
 
 ## UI
 

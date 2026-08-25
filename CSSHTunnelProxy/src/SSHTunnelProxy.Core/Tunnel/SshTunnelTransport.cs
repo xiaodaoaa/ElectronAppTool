@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 using SSHTunnelProxy.Core.Models;
@@ -14,6 +15,7 @@ public sealed class SshTunnelTransport : ISshTunnelTransport
     private readonly SshServerProfile _profile;
     private readonly IHostKeyVerifier _hostKeyVerifier;
     private readonly IDpapiProtector _protector;
+    private readonly ILogger? _logger;
     private readonly object _stateLock = new();
     private SemaphoreSlim? _connectLock;
 
@@ -25,11 +27,13 @@ public sealed class SshTunnelTransport : ISshTunnelTransport
     public SshTunnelTransport(
         SshServerProfile profile,
         IHostKeyVerifier hostKeyVerifier,
-        IDpapiProtector protector)
+        IDpapiProtector protector,
+        ILogger? logger = null)
     {
         _profile = profile;
         _hostKeyVerifier = hostKeyVerifier;
         _protector = protector;
+        _logger = logger;
     }
 
     public TunnelState State
@@ -60,6 +64,8 @@ public sealed class SshTunnelTransport : ISshTunnelTransport
                 return;
 
             SetState(TunnelState.Connecting);
+            _logger?.LogInformation("SSH 连接中 {Host}:{Port}（用户 {User}，认证 {Auth}）",
+                _profile.Host, _profile.Port, _profile.Username, _profile.AuthMethod);
 
             var connectionInfo = BuildConnectionInfo();
             var client = new SshClient(connectionInfo)
@@ -74,12 +80,14 @@ public sealed class SshTunnelTransport : ISshTunnelTransport
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                _logger?.LogError(ex, "SSH 连接失败 {Host}:{Port}", _profile.Host, _profile.Port);
                 client.Dispose();
                 SetState(TunnelState.Error, ex.Message);
                 throw;
             }
 
             _client = client;
+            _logger?.LogInformation("SSH 连接成功 {Host}:{Port}", _profile.Host, _profile.Port);
             SetState(TunnelState.Connected);
             client.ErrorOccurred += OnClientError;
             StartMonitor();
@@ -117,6 +125,7 @@ public sealed class SshTunnelTransport : ISshTunnelTransport
                 client.Disconnect();
                 client.Dispose();
             }
+            _logger?.LogInformation("SSH 主动断开 {Host}:{Port}", _profile.Host, _profile.Port);
             SetState(TunnelState.Disconnected);
         }
         finally
@@ -136,23 +145,34 @@ public sealed class SshTunnelTransport : ISshTunnelTransport
         if (!client.IsConnected)
             throw new IOException("SSH 连接已断开。");
 
-        var channel = await SshDirectTcpipChannel.OpenAsync(
-            client,
-            targetHost,
-            targetPort,
-            cancellationToken);
-
-        return channel.Stream;
+        try
+        {
+            var channel = await SshDirectTcpipChannel.OpenAsync(
+                client,
+                targetHost,
+                targetPort,
+                cancellationToken,
+                _logger);
+            return channel.Stream;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger?.LogWarning(ex, "建立 direct-tcpip 通道失败 {Target}", $"{targetHost}:{targetPort}");
+            throw;
+        }
     }
 
     private void OnHostKeyReceived(object? sender, HostKeyEventArgs e)
     {
-        e.CanTrust = _hostKeyVerifier.VerifyHostKey(_profile.Host, _profile.Port, e.HostKey);
+        var trusted = _hostKeyVerifier.VerifyHostKey(_profile.Host, _profile.Port, e.HostKey);
+        e.CanTrust = trusted;
+        _logger?.LogInformation("主机密钥校验 {Host}:{Port} → {Result}", _profile.Host, _profile.Port, trusted ? "信任" : "拒绝");
     }
 
     private void OnClientError(object? sender, ExceptionEventArgs e)
     {
         // SSH 层错误，通常是连接中断。
+        _logger?.LogWarning(e.Exception, "SSH 客户端错误事件 {Host}:{Port}", _profile.Host, _profile.Port);
         if (_state == TunnelState.Connected)
         {
             SetState(TunnelState.Error, e.Exception?.Message);
@@ -193,6 +213,7 @@ public sealed class SshTunnelTransport : ISshTunnelTransport
                     break;
                 if (_state == TunnelState.Connected && !client.IsConnected)
                 {
+                    _logger?.LogWarning("监控检测到 SSH 连接已断开 {Host}:{Port}", _profile.Host, _profile.Port);
                     SetState(TunnelState.Error, "SSH 连接已断开。");
                     ConnectionLost?.Invoke(this, EventArgs.Empty);
                 }

@@ -1,4 +1,6 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SSHTunnelProxy.Core.Models;
 using SSHTunnelProxy.Core.Security;
 using SSHTunnelProxy.Core.Services;
@@ -15,7 +17,7 @@ public class ConfigServiceTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "stp_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
-        _service = new ConfigService(new DpapiProtector(), _tempDir);
+        _service = new ConfigService(new DpapiProtector(), NullLogger<ConfigService>.Instance, _tempDir);
     }
 
     [Fact]

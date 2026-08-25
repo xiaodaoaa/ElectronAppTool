@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SSHTunnelProxy.Core.Models;
 using SSHTunnelProxy.Core.Tunnel;
 using SSHTunnelProxy.Core.Utils;
@@ -15,6 +16,7 @@ public sealed class HttpProxyServer : IProxyServer
 {
     private readonly ProxyServerOptions _options;
     private readonly ISshTunnelTransport _transport;
+    private readonly ILogger? _logger;
 
     private TcpListener? _listener;
     private readonly CancellationTokenSource _cts = new();
@@ -25,6 +27,7 @@ public sealed class HttpProxyServer : IProxyServer
     {
         _transport = transport;
         _options = options;
+        _logger = options.Logger;
     }
 
     public ProxyType Type => ProxyType.Http;
@@ -42,6 +45,7 @@ public sealed class HttpProxyServer : IProxyServer
         BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _running = true;
 
+        _logger?.LogInformation("HTTP 代理监听已启动 {Tunnel} @{Address}:{Port}", _options.TunnelName, _options.ListenAddress, BoundPort);
         _ = AcceptLoopAsync();
         await Task.CompletedTask;
     }
@@ -60,6 +64,7 @@ public sealed class HttpProxyServer : IProxyServer
             await Task.Delay(50);
 
         _listener = null;
+        _logger?.LogInformation("HTTP 代理监听已停止 {Tunnel}", _options.TunnelName);
     }
 
     private async Task AcceptLoopAsync()
@@ -100,9 +105,11 @@ public sealed class HttpProxyServer : IProxyServer
             channel = await RunProtocolAsync(clientStream, log);
             log.Status = "Success";
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             log.Status = "Failed";
+            _logger?.LogWarning(ex, "HTTP 连接处理失败 {Tunnel} 客户端 {Client} 目标 {Target}",
+                _options.TunnelName, log.ClientEndpoint, log.TargetEndpoint);
         }
         finally
         {
@@ -117,8 +124,16 @@ public sealed class HttpProxyServer : IProxyServer
             var sink = _options.ConnectionSink;
             if (sink is not null)
             {
-                try { await sink.RecordConnectionAsync(log); } catch { }
+                try { await sink.RecordConnectionAsync(log); }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "回写连接日志失败 {Tunnel}", _options.TunnelName);
+                }
             }
+
+            _logger?.LogDebug("HTTP 连接结束 {Tunnel} {Client}→{Target} 上传 {Up} 下载 {Down} 时长 {Duration}ms 状态 {Status}",
+                _options.TunnelName, log.ClientEndpoint, log.TargetEndpoint,
+                log.BytesSent, log.BytesReceived, (long)log.Duration.TotalMilliseconds, log.Status);
 
             client.Dispose();
             Interlocked.Decrement(ref _activeClients);
@@ -137,6 +152,7 @@ public sealed class HttpProxyServer : IProxyServer
             await WriteResponseAsync(clientStream,
                 "HTTP/1.1 405 Method Not Allowed\r\n" +
                 "Content-Length: 0\r\nConnection: close\r\n\r\n");
+            _logger?.LogWarning("HTTP 仅支持 CONNECT，收到 {Method} {Tunnel} 客户端 {Client}", request.Method, _options.TunnelName, log.ClientEndpoint);
             throw new HttpParseException($"首期仅支持 CONNECT 方法，收到：{request.Method}");
         }
 
@@ -152,6 +168,7 @@ public sealed class HttpProxyServer : IProxyServer
                     "HTTP/1.1 407 Proxy Authentication Required\r\n" +
                     "Proxy-Authenticate: Basic realm=\"SSHTunnelProxy\"\r\n" +
                     "Content-Length: 0\r\nConnection: close\r\n\r\n");
+                _logger?.LogWarning("HTTP 代理认证失败 {Tunnel} 客户端 {Client} 原因 {Reason}", _options.TunnelName, log.ClientEndpoint, failureReason);
                 log.Status = "Failed";
                 throw new HttpParseException(failureReason);
             }
@@ -161,6 +178,7 @@ public sealed class HttpProxyServer : IProxyServer
         {
             await WriteResponseAsync(clientStream,
                 "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            _logger?.LogWarning("HTTP 建连时隧道未连接 {Tunnel} 目标 {Target}", _options.TunnelName, log.TargetEndpoint);
             throw new IOException("SSH 隧道未连接。");
         }
 
@@ -169,10 +187,11 @@ public sealed class HttpProxyServer : IProxyServer
         {
             channel = await _transport.OpenChannelAsync(host, port, _cts.Token);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             await WriteResponseAsync(clientStream,
                 "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            _logger?.LogWarning(ex, "HTTP 建立隧道通道失败 {Tunnel} 目标 {Target}", _options.TunnelName, log.TargetEndpoint);
             throw;
         }
 
@@ -181,7 +200,7 @@ public sealed class HttpProxyServer : IProxyServer
             _cts.Token);
 
         // 双向透传。
-        var relay = await StreamRelay.RelayAsync(clientStream, channel, _options.Traffic, _cts.Token);
+        var relay = await StreamRelay.RelayAsync(clientStream, channel, _options.Traffic, _cts.Token, _logger);
         log.BytesSent = relay.BytesUpstream;
         log.BytesReceived = relay.BytesDownstream;
         return channel;

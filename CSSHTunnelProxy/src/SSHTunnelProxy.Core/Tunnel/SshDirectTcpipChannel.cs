@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Renci.SshNet;
 using System.Net;
 using System.Net.Sockets;
@@ -16,15 +17,18 @@ public sealed class SshDirectTcpipChannel : IAsyncDisposable
     private readonly SshClient _client;
     private readonly ForwardedPortLocal _forwardedPort;
     private readonly TcpClient _localClient;
+    private readonly ILogger? _logger;
 
     private SshDirectTcpipChannel(
         SshClient client,
         ForwardedPortLocal forwardedPort,
-        TcpClient localClient)
+        TcpClient localClient,
+        ILogger? logger)
     {
         _client = client;
         _forwardedPort = forwardedPort;
         _localClient = localClient;
+        _logger = logger;
     }
 
     /// <summary>经本地桥接后可双向读写的对流（连接到 SSH 隧道）。</summary>
@@ -37,11 +41,13 @@ public sealed class SshDirectTcpipChannel : IAsyncDisposable
     /// <param name="targetHost">目标主机</param>
     /// <param name="targetPort">目标端口</param>
     /// <param name="cancellationToken">取消令牌</param>
+    /// <param name="logger">运行日志器（可为 null）</param>
     public static async Task<SshDirectTcpipChannel> OpenAsync(
         SshClient client,
         string targetHost,
         int targetPort,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ILogger? logger = null)
     {
         // boundPort=0 使用系统分配的临时端口；本地仅本机回环访问。
         var forwardedPort = new ForwardedPortLocal(
@@ -59,8 +65,9 @@ public sealed class SshDirectTcpipChannel : IAsyncDisposable
                 _ = forwardedPort.BoundPort; // 触发端口绑定完成
             }, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger?.LogError(ex, "ForwardedPortLocal 启动失败 {Target}", $"{targetHost}:{targetPort}");
             client.RemoveForwardedPort(forwardedPort);
             throw;
         }
@@ -73,14 +80,15 @@ public sealed class SshDirectTcpipChannel : IAsyncDisposable
                 (int)forwardedPort.BoundPort,
                 cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger?.LogWarning(ex, "连接本地桥接端口失败 {Target}", $"{targetHost}:{targetPort}");
             localClient.Dispose();
-            StopPort(client, forwardedPort);
+            StopPort(client, forwardedPort, logger);
             throw;
         }
 
-        return new SshDirectTcpipChannel(client, forwardedPort, localClient);
+        return new SshDirectTcpipChannel(client, forwardedPort, localClient, logger);
     }
 
     public async ValueTask DisposeAsync()
@@ -90,38 +98,38 @@ public sealed class SshDirectTcpipChannel : IAsyncDisposable
         {
             _localClient.Close();
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略关闭异常。
+            _logger?.LogWarning(ex, "关闭本地桥接客户端异常");
         }
-        StopPort(_client, _forwardedPort);
+        StopPort(_client, _forwardedPort, _logger);
     }
 
-    private static void StopPort(SshClient client, ForwardedPortLocal port)
+    private static void StopPort(SshClient client, ForwardedPortLocal port, ILogger? logger)
     {
         try
         {
             port.Stop();
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略停止异常。
+            logger?.LogWarning(ex, "停止 ForwardedPortLocal 异常");
         }
         try
         {
             client.RemoveForwardedPort(port);
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略移除异常。
+            logger?.LogWarning(ex, "移除 ForwardedPortLocal 异常");
         }
         try
         {
             port.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略释放异常。
+            logger?.LogWarning(ex, "释放 ForwardedPortLocal 异常");
         }
     }
 }
